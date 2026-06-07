@@ -1,0 +1,179 @@
+In file included from ./includes/../src/files.c:1,
+                 from ./includes/files.h:3,
+                 from main.c:1:
+./includes/../src/../includes/defines.h: En la función ‘find_carriage’:
+./includes/../src/../includes/defines.h:48:77: warning: se sugieren paréntesis alrededor de ‘&&’ junto con ‘||’ [-Wparentheses]
+   46 |       if ((cursor->curr_mem == BUFFER - 3 &&
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                 
+   47 |                cursor->memory[BUFFER - 3] == '\r' &&
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                         
+   48 |                cursor->memory[BUFFER - 3] == '\n' && local_cur < BUFFER - 1 &&
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+   49 |                (stream[local_cur + 1] == '\n') ||
+      |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                               
+./includes/../src/../includes/defines.h:57:24: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+   57 |   if (cursor->curr_mem == -1) {
+      |                        ^~
+./includes/../src/files.c: En la función ‘get_biggest_index’:
+./includes/../src/files.c:59:14: warning: variable ‘nombre_sin_ext’ sin usar [-Wunused-variable]
+   59 |   char *dot, nombre_sin_ext[256];
+      |              ^~~~~~~~~~~~~~
+./includes/../src/files.c:59:9: warning: variable ‘dot’ sin usar [-Wunused-variable]
+   59 |   char *dot, nombre_sin_ext[256];
+      |         ^~~
+In file included from ./includes/server-defines.h:4,
+                 from main.c:2:
+./includes/http-sanitize.h: En la función ‘validator_header_key’:
+./includes/http-sanitize.h:188:16: error: declaración implícita de la función ‘strncasecmp’; ¿quiso decir ‘strncmp’? [-Wimplicit-function-declaration]
+  188 |   int result = strncasecmp(head, needle, head_len);
+      |                ^~~~~~~~~~~
+      |                strncmp
+In file included from ./src/../includes/common-response.h:4,
+                 from ./src/server.c:1,
+                 from main.c:3:
+./src/../includes/common-response.h: En la función ‘bad_request’:
+./src/../includes/common-response.h:26:56: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long long unsigned int’ [-Wsign-compare]
+   26 |                   body != NULL ? body : "Bad Request") < buffer);
+      |                                                        ^
+./src/../includes/common-response.h: En la función ‘internal_server_error’:
+./src/../includes/common-response.h:50:65: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long long unsigned int’ [-Wsign-compare]
+   50 |                   body != NULL ? body : "Something went wrong") < buffer);
+      |                                                                 ^
+./src/../includes/common-response.h: En la función ‘not_found’:
+./src/../includes/common-response.h:72:54: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long long unsigned int’ [-Wsign-compare]
+   72 |                   body != NULL ? body : "Not Found") < buffer);
+      |                                                      ^
+./src/../includes/common-response.h: En la función ‘created’:
+./src/../includes/common-response.h:94:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long long unsigned int’ [-Wsign-compare]
+   94 |                   body != NULL ? body : "Created") < buffer);
+      |                                                    ^
+In file included from ./src/../src/../includes/../src/../includes/list.h:3,
+                 from ./src/../src/../includes/../src/server-machine.c:1,
+                 from ./src/../src/../includes/server-machine.h:3,
+                 from ./src/../src/api-image.c:3,
+                 from ./src/server.c:5:
+./src/../src/../includes/../src/../includes/../src/list.c: En la función ‘list_insert’:
+./src/../src/../includes/../src/../includes/../src/list.c:29:55: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {también conocido como ‘long unsigned int’} [-Wsign-compare]
+   29 |   if (0 == l->len || !l->array || index < -1 || index >= l->len) {
+      |                                                       ^~
+./src/../src/../includes/../src/../includes/../src/list.c:35:25: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {también conocido como ‘long unsigned int’} [-Wsign-compare]
+   35 |   for (int i = index; i < l->len - 1; i++) {
+      |                         ^
+./src/../src/../includes/../src/../includes/../src/list.c: En la función ‘list_remove’:
+./src/../src/../includes/../src/../includes/../src/list.c:73:55: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {también conocido como ‘long unsigned int’} [-Wsign-compare]
+   73 |   if (0 == l->len || !l->array || index < -1 || index >= l->len) {
+      |                                                       ^~
+./src/../src/../includes/../src/../includes/../src/list.c:78:25: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {también conocido como ‘long unsigned int’} [-Wsign-compare]
+   78 |   for (int i = index; i < l->len - 1; i++) {
+      |                         ^
+./src/../src/api-image.c: En la función ‘file_extension’:
+./src/../src/api-image.c:86:3: warning: el valor de enumeración ‘FT_UNKNOWN’ no se maneja en un switch [-Wswitch]
+   86 |   switch (ft) {
+      |   ^~~~~~
+./src/../src/api-image.c: En la función ‘post_api_image’:
+./src/../src/api-image.c:178:18: error: no se conoce el tamaño de almacenamiento de ‘tv’
+  178 |   struct timeval tv;
+      |                  ^~
+./src/../src/api-image.c:178:18: warning: variable ‘tv’ sin usar [-Wunused-variable]
+/usr/include/strings.h: En el nivel principal:
+./includes/../src/../includes/defines.h:10:3: error: expected identifier or ‘(’ before ‘{’ token
+   10 |   { memset((x), 0, (len_x)); }
+      |   ^
+./includes/../src/../includes/defines.h:10:3: warning: declaración vacía
+In file included from /usr/include/features.h:540,
+                 from /usr/include/errno.h:25,
+                 from ./includes/../src/../includes/defines.h:3:
+./includes/../src/../includes/defines.h:10:3: error: expected identifier or ‘(’ before ‘{’ token
+   10 |   { memset((x), 0, (len_x)); }
+      |   ^
+In file included from /usr/include/strings.h:144,
+                 from ./src/server.c:16:
+/usr/include/bits/strings_fortified.h:31:1: error: expected identifier or ‘(’ before ‘{’ token
+   31 | {
+      | ^
+./src/server.c: En la función ‘get_key’:
+./src/server.c:33:44: warning: la inicialización descarta el calificador ‘const’ del tipo del destino del puntero [-Wdiscarded-qualifiers]
+   33 |                                            param->key, // ← param->key (con ->)
+      |                                            ^~~~~
+./src/server.c: En la función ‘get_key_value’:
+./src/server.c:39:47: warning: la inicialización descarta el calificador ‘const’ del tipo del destino del puntero [-Wdiscarded-qualifiers]
+   39 |   return (__http_sanitize_key_value_t){.key = param->key,
+      |                                               ^~~~~
+./src/server.c: En la función ‘get_key_content’:
+./src/server.c:47:47: warning: la inicialización descarta el calificador ‘const’ del tipo del destino del puntero [-Wdiscarded-qualifiers]
+   47 |   return (__http_sanitize_key_value_t){.key = param->key,
+      |                                               ^~~~~
+./src/server.c: En la función ‘server_job’:
+./src/server.c:281:23: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  281 |       if (route_index == -1 || !validate_params(routes[route_index], url)) {
+      |                       ^~
+./src/server.c:277:27: warning: variable ‘method’ sin usar [-Wunused-variable]
+  277 |       enum http_methods_t method = get_method(read_buffer, &i);
+      |                           ^~~~~~
+./src/server.c:366:32: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  366 |                cursor.curr_mem == -1
+      |                                ^~
+./src/server.c:372:24: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  372 |            cursor.curr < n &&
+      |                        ^
+./src/server.c:453:26: warning: ISO C prohíbe la conversión de un apuntador a función a un tipo de objeto apuntador [-Wpedantic]
+  453 |                          (void *)(*header)->validators[j]);
+      |                          ^
+./src/server.c:502:23: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  502 |       if (cursor.curr == n) { // end of the stream
+      |                       ^~
+./src/server.c:526:33: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {también conocido como ‘long unsigned int’} [-Wsign-compare]
+  526 |         if (n < BUFFER - 1 && n == cursor.curr &&
+      |                                 ^~
+./src/server.c:272:5: warning: el valor de enumeración ‘WAITING’ no se maneja en un switch [-Wswitch]
+  272 |     switch (get_state(local_machine)) {
+      |     ^~~~~~
+./src/server.c:272:5: warning: el valor de enumeración ‘WORKING’ no se maneja en un switch [-Wswitch]
+./src/server.c:272:5: warning: el valor de enumeración ‘ENDING’ no se maneja en un switch [-Wswitch]
+./src/server.c:259:8: warning: variable ‘stop_headers’ sin usar [-Wunused-variable]
+  259 |   bool stop_headers = false;
+      |        ^~~~~~~~~~~~
+In file included from main.c:4:
+main.c: En la función ‘get_idx’:
+main.c:13:20: warning: comparison of integer expressions of different signedness: ‘long long unsigned int’ and ‘int’ [-Wsign-compare]
+   13 |     assert(current != -1);
+      |                    ^~
+./src/../includes/common-response.h: En la función ‘bad_request’:
+./src/../includes/common-response.h:27:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+   27 |   write(client_fd, b, buffer);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../includes/common-response.h: En la función ‘internal_server_error’:
+./src/../includes/common-response.h:51:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+   51 |   write(client_fd, b, buffer);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../includes/common-response.h: En la función ‘not_found’:
+./src/../includes/common-response.h:73:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+   73 |   write(client_fd, b, buffer);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../includes/common-response.h: En la función ‘created’:
+./src/../includes/common-response.h:95:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+   95 |   write(client_fd, b, buffer);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../src/api-image.c: En la función ‘file_extension’:
+./src/../src/api-image.c:95:1: warning: el control alcanza el final de una función que no es void [-Wreturn-type]
+   95 | }
+      | ^
+./src/../src/api-image.c: En la función ‘post_api_image’:
+./src/../src/api-image.c:173:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+  173 |   write(fd, read_buffer + body_offset, bytes_en_buffer);
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../src/api-image.c:190:7: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+  190 |       write(fd, read_buffer, n);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~
+./src/../src/api-image.c:210:3: warning: ignoring return value of ‘write’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+  210 |   write(get_client_fd(local_machine), send_buffer, strlen(send_buffer));
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./src/server.c: En la función ‘server_job’:
+./src/server.c:275:35: warning: esta sentencia puede fracasar [-Wimplicit-fallthrough=]
+  275 |     case PROCESSING_REQUEST_LINE: {
+      |                                   ^
+./src/server.c:331:5: note: aquí
+  331 |     case PROCESSING_HEADERS: {
+      |     ^~~~
+En el nivel principal:
+cc1: note: unrecognized command-line option ‘-Wno-unused-parameters’ may have been intended to silence earlier diagnostics

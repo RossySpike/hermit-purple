@@ -1,54 +1,29 @@
+#include "../includes/common-response.h"
 #include "../includes/defines.h" // for fperror,  bzero macros.
 #include "../includes/http-sanitize.h" // for __http_sanitize_key_value_t struct, validator functions.
 #include "../includes/server-defines.h" // for  BUFFER, PORT, BACKLOG, macros; http_methods_t enum.
 #include "../src/api-image.c"
 #include "../src/server-routes.c"
 #include <asm-generic/socket.h>
-#include <assert.h>
 #include <fcntl.h>      // for open() function
 #include <netinet/in.h> // for sockaddr_in structure.
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h> // for exit() function.
-#include <string.h>
 #include <strings.h>
 #include <sys/socket.h> // for socket() function.
 #include <sys/stat.h>   // for fstat() function
 #include <sys/types.h>  // for types.
 
-struct __container {
-  const server_routes_t route;
-  size_t index;
-};
-#define __quick_cast                                                           \
-  struct __container wtfimdoing = *(struct __container *)obj;                  \
-  key_value_t *param =                                                         \
-      wtfimdoing.route.params[wtfimdoing.index]; // ← Notar el *
-
-__http_sanitize_key_value_t get_key(void *obj) {
-  __quick_cast;
-  return (__http_sanitize_key_value_t){.key =
-                                           param->key, // ← param->key (con ->)
-                                       .required = param->required};
+ssize_t seek_separator(const char *params) {
+  for (size_t i = 0; params[i] != '\0'; i++) {
+    if (params[i] == '&' || params[i] == ' ') {
+      return i;
+    }
+  }
+  return -1;
 }
-
-__http_sanitize_key_value_t get_key_value(void *obj) {
-  __quick_cast;
-  return (__http_sanitize_key_value_t){.key = param->key,
-                                       .value = param->type,
-                                       .required =
-                                           param->required}; // ← param->
-}
-
-__http_sanitize_key_value_t get_key_content(void *obj) {
-  __quick_cast;
-  return (__http_sanitize_key_value_t){.key = param->key,
-                                       .content = param->contents,
-                                       .required =
-                                           param->required}; // ← param->
-}
-
 typedef struct SERVER_ADDR {
   struct sockaddr_in addr;
   socklen_t len;
@@ -153,13 +128,13 @@ int destroy_server(server *s) {
 enum http_methods_t get_method(char *r, size_t *start_url) {
   printf("DEBUG: %s\n", __func__);
   char *first_space = strchr(r, ' ');
-  if (first_space == NULL) {
+  if (first_space == nullptr) {
     return -1; // No space found, invalid request
   }
   first_space++;
   int len = first_space - r;
 
-  if (start_url != NULL)
+  if (start_url != nullptr)
     *start_url = len; // Set `start_url` to the position after the method
   char method[len];
   method[len - 1] = '\0'; // ensure null-terminated
@@ -189,16 +164,16 @@ enum http_methods_t get_method(char *r, size_t *start_url) {
  * @param url The URL string to check.
  * @return The index of the matching server_routes_t, or -1 if not found.
  */
-size_t check_url(char *url) {
+ssize_t check_url(const char *url) {
   printf("DEBUG: %s\n", __func__);
   const server_routes_t *local_routes = routes;
 
-  for (size_t i = 0; local_routes[i].uri_regex != NULL; i++) {
+  for (size_t i = 0; local_routes[i].uri_regex != nullptr; i++) {
     printf("Patron: %s \n", local_routes[i].uri_regex);
     int res = check_regex(url, local_routes[i].uri_regex);
     if (res == 1) {
       printf("hallada con patron %s\n", local_routes[i].uri_regex);
-      return i;
+      return i; // TODO: change
     } else if (res == -1) {
       perror("FALLO EL PATRON");
       exit(1);
@@ -211,44 +186,6 @@ size_t check_url(char *url) {
 
 // TODO: Check
 
-/**
- * Validates all parameters for a given route and URL.
- *
- * Expects: url is a null-terminated string.
- *
- * @param route The server route definition.
- * @param url The request URL.
- * @return true if all required parameters are valid or none are required, false
- * otherwise.
- */
-bool validate_params(server_routes_t route, char *url) {
-  printf("DEBUG: %s\n", __func__);
-  // Primero verificar si params es NULL o está vacío
-  if (route.params == NULL) {
-    return true; // Sin parametros, siempre valido
-  }
-
-  for (size_t i = 0; route.params[i] != NULL; i++) {
-    key_value_t *param = route.params[i]; // Obtener el puntero a la estructura
-
-    // Verificar si tiene validadores
-    if (param->validators == NULL) {
-      continue; // Sin validadores, pasar al siguiente
-    }
-
-    for (size_t f = 0; param->validators[f] != NULL; f++) {
-      struct __container obj = {.route = route, .index = i};
-
-      if (!param->validators[f]((void *)url, (void *)&obj)) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-validator_func_t **shift_checked(validator_func_t **arr,
-                                 validator_func_t *needle);
 void *server_job(void *args) {
   printf("DEBUG: %s\n", __func__);
   server_machine *local_machine = (server_machine *)args;
@@ -256,36 +193,41 @@ void *server_job(void *args) {
   char send_buffer[BUFFER] = {0};
   char read_buffer[BUFFER] = {0};
   set_state(local_machine, PROCESSING_REQUEST_LINE);
-  int n = 0; // number of bytes read
-  bool stop_headers = false;
+  ssize_t n = 0; // number of bytes read
+  /* bool stop_headers = false; */
   stream_cursor cursor = {
       0}; // has an index to the current character of the stream and a buffer to
           // store old values from the stream that need to be used
-  cursor.curr_mem = -1;
 
+  cursor.empty_mem = true;
   size_t completed_headers = 0; // I dont remember why I used this
   printf("llegue\n");
-  while (get_state(local_machine) < WORKING &&
-         (n = read(get_client_fd(local_machine), read_buffer, BUFFER - 1)) >
-             0) {
-    printf("=========\n%s=========\nnBytes: %d\n=========\n", read_buffer, n);
+  bool should_read = true;
+  while (!should_read || ((n = read(get_client_fd(local_machine), read_buffer,
+                                    BUFFER - 1)) > 0)) {
+    printf("=========\n%s=========\nnBytes: %li\n=========\n", read_buffer, n);
 
+    should_read = true;
     switch (get_state(local_machine)) {
 
     // Frist case:
     case PROCESSING_REQUEST_LINE: {
       size_t i = 1;
-      enum http_methods_t method = get_method(read_buffer, &i);
-      char *url = read_buffer + i;
-      size_t route_index = check_url(url);
+      get_method(read_buffer, &i);
+      ssize_t route_index = check_url(read_buffer);
 
-      if (route_index == -1 || !validate_params(routes[route_index], url)) {
-        snprintf(send_buffer, BUFFER, "HTTP/1.1 404 Not Found\r\n\r\n");
-        write(get_client_fd(local_machine), send_buffer,
-              strlen(send_buffer)); // TODO: add error handling
+      char *url = read_buffer + i;
+
+      if (route_index == -1) {
+        /* snprintf(send_buffer, BUFFER, "HTTP/1.1 404 Not Found\r\n\r\n"); */
+        /* write(get_client_fd(local_machine), send_buffer, */
+        /*       strlen(send_buffer)); // TODO: add error handling */
+
+        not_found(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
         set_state(local_machine, ENDING);
 
-        goto ENDING;
+        should_read = false;
+        break;
       }
 
       int result = find_carriage(&cursor, read_buffer);
@@ -294,18 +236,32 @@ void *server_job(void *args) {
           result == 1) { // In order to proceed we need result should be 0 or 2
                          // because the first line of the request shouldn't be
                          // bigger than BUFFER
-        snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n");
-        write(get_client_fd(local_machine), send_buffer,
-              strlen(send_buffer)); // TODO: add error handling
+        /* snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n"); */
+        /* write(get_client_fd(local_machine), send_buffer, */
+        /*       strlen(send_buffer)); // TODO: add error handling */
 
-        goto ENDING;
+        bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
         set_state(local_machine, ENDING);
+        should_read = false;
+        break;
       }
-      // NOTE: Stores the params as the full url, should change it to properly
-      // add the params
-      add_params(local_machine,
-                 url); // Stores the params for the current session in order to
-                       // have it when processing the request
+      size_t j = 0;
+      for (; url[j] != '\0' && url[j] != '?' && url[j] != ' '; j++) {
+      }
+      if (url[j] == '?') {
+
+        char *param = url + j + 1;
+        param++;
+        ssize_t idx = 0;
+        for (; (idx = seek_separator(param)) != -1;) {
+          char *p = param;
+          p[idx] = '\0';
+          add_params(local_machine, p);
+          param += idx + 1;
+        }
+      }
+
+      // in order to have it when processing the request
       cursor.curr =
           ++cursor
                 .offset; // find_carriage modifies the offset, and because its
@@ -313,7 +269,7 @@ void *server_job(void *args) {
                          // index is assined the next character from the offset
       set_route_index(
           local_machine,
-          route_index); // stored the `route_index` into `local_machine`
+          (size_t)route_index); // stored the `route_index` into `local_machine`
 
       // NOTE: previously `result < 1` and it worked
       if (result == 0) {
@@ -323,7 +279,10 @@ void *server_job(void *args) {
       } else if (result == 2) {
 
         set_state(local_machine, WORKING);
+        should_read = false;
+        break;
       }
+      [[fallthrough]];
     }
 
     case PROCESSING_HEADERS: {
@@ -337,16 +296,20 @@ void *server_job(void *args) {
         continue;
       int result = find_carriage(&cursor, read_buffer);
       if (result == -1) { // header too large
-        snprintf(send_buffer, BUFFER,
-                 "HTTP/1.1 400 Bad Request\r\n\r\nHeader too large");
-        write(get_client_fd(local_machine), send_buffer,
-              strlen(send_buffer)); // TODO: add error handling
+        /* snprintf(send_buffer, BUFFER, */
+        /*          "HTTP/1.1 400 Bad Request\r\n\r\nHeader too large"); */
+        /* write(get_client_fd(local_machine), send_buffer, */
+        /*       strlen(send_buffer)); // TODO: add error handling */
+        bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                    "Header too large");
         set_state(local_machine, ENDING);
-        goto ENDING;
+        should_read = false;
+        break;
       }
       if (result == 2) {
         set_state(local_machine, ENDING); //
-        goto ENDING;
+        should_read = false;
+        break;
       }
       if (result == 1) {
         cursor.curr = 0;
@@ -359,13 +322,14 @@ void *server_job(void *args) {
       size_t skips = 0; // will track the double CRLF, so lets say it founds
                         // "b\r\nH" would be skip=0->skips++->skips++->skips=0
       for (size_t *local_mem_index =
-               cursor.curr_mem == -1
+               cursor.empty_mem
                    ? &i
                    : &cursor.curr_mem; // `local_mem_index` will be used as the
                                        // `cursor.memory` index, if its empty
                                        // `local_mem_index` will use `i` else
                                        // will use `cursor.curr_mem`
-           cursor.curr < n &&
+           cursor.curr <
+               (size_t)n && // n will never be 0 bc of while loop condition
            (last_char != '\n' ||
             skips != 4); // cursor.curr ist the last char of the string and
                          // havent found double CRLF
@@ -381,7 +345,7 @@ void *server_job(void *args) {
 
             printf("[+] Header=%s\n", cursor.memory);
             size_t i = 0;
-            for (key_value_t **header = THIS_ROUTE.headers; *header != NULL;
+            for (auto header = THIS_ROUTE.headers; header->key != nullptr;
                  i++, header++) {
               printf("DEBUG: completed_headers: %lu\n", completed_headers);
               printf("DEBUG: completed_headers & ((size_t)1 << i -> %lu & "
@@ -392,33 +356,34 @@ void *server_job(void *args) {
                   0) { // As we iterate over the `server_routes_t` headers if we
                        // find the same header the request in invalid
 
+                continue;
                 printf("DEBUG: found duplicated header\n");
                 printf("[+] DEBUG Header %s failed\n", cursor.memory);
-                snprintf(send_buffer, BUFFER,
-                         "HTTP/1.1 400 Bad Request\r\n\r\nBad headers");
-                write(get_client_fd(local_machine), send_buffer,
-                      strlen(send_buffer)); // TODO: add error handling
+                /* snprintf(send_buffer, BUFFER, */
+                /*          "HTTP/1.1 400 Bad Request\r\n\r\nBad headers"); */
+                /* write(get_client_fd(local_machine), send_buffer, */
+                /*       strlen(send_buffer)); // TODO: add error handling */
+                bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                            "Bad headers");
                 set_state(local_machine, ENDING);
-                goto ENDING;
+                should_read = false;
+                break;
               } // TODO: refactor
 
               bool good_header = true;
-              printf("DEBUG: Processing header definition: %s\n",
-                     (*header)->key);
-              printf("DEBUG: validators array at %p\n",
-                     (void *)(*header)->validators);
+              printf("DEBUG: Processing header definition: %s\n", header->key);
 
               bool should_add = true; // ifts not required then we dont add it
-              if ((*header)->validators != NULL) {
+              if (header->validators != nullptr) {
                 // evaluates every validator, ( header[i] )->validators[j]
                 //
                 for (size_t j = 0;
-                     (*header)->validators[j] != NULL && good_header != false;
-                     good_header = (*header)->validators[j](
-                         (void *)*header, // header must be dereferenced
-                         (void *)cursor.memory),
+                     header->validators[j] != nullptr && good_header != false;
+                     good_header = header->validators[j](
+                         *header, // header must be dereferenced
+                         cursor.memory),
                             j++) {
-                  if (!good_header && !(*header)->required) {
+                  if (!good_header && !header->required) {
                     // this will matter only in the first
                     // iteration of the loop, as its
                     // required to add a header_key to be
@@ -442,16 +407,15 @@ void *server_job(void *args) {
                     should_add = false;
                     break;
                   }
-                  printf("DEBUG: validator[%zu] = %p\n", j,
-                         (void *)(*header)->validators[j]);
                   printf("DEBUG: good_header[j:%lu]=%d\n", j, good_header);
                 }
               } else {
-                printf("DEBUG: validators is NULL!\n");
+                printf("DEBUG: validators is nullptr!\n");
               }
 
               if (good_header) {
                 completed_headers |= ((size_t)1 << i);
+                printf("DEBUG: SETTING BIT AS MARKED\n");
                 if (should_add) {
                   printf("DEBUG: ABOUT TO ADD HEADER: '%s'\n", cursor.memory);
 
@@ -467,6 +431,8 @@ void *server_job(void *args) {
               }
               printf("DEBUG: completed_headers: %lu\n", completed_headers);
             }
+            if (get_state(local_machine) == ENDING)
+              break;
           }
 
           last_char = '\r';     // every header ends with crlf.
@@ -491,7 +457,7 @@ void *server_job(void *args) {
                                       // into `cursor.memory` while incrementing
                                       // its index
       }
-      if (cursor.curr == n) { // end of the stream
+      if (cursor.curr == (size_t)n) { // end of the stream
 
         cursor.curr = 0;
         cursor.offset = 0;
@@ -500,38 +466,46 @@ void *server_job(void *args) {
           skips == 4) { // double CRLF found, end of headers
 
         size_t k = 0;
-        for (key_value_t **header = THIS_ROUTE.headers; *header != NULL;
+        for (auto header = THIS_ROUTE.headers; header->key != nullptr;
              k++, header++) {
           printf("DEBUG: validating all headers required were given\n");
-          if ((completed_headers & ((size_t)1 << k)) != 1 &&
-              (*header)->required) {
-            snprintf(send_buffer, BUFFER,
-                     "HTTP/1.1 400 Bad Request\r\n\r\nBad headers");
-            write(get_client_fd(local_machine), send_buffer,
-                  strlen(send_buffer)); // TODO: add error handling
+          if ((completed_headers & ((size_t)1 << k)) != 1 && header->required) {
+            /* snprintf(send_buffer, BUFFER, */
+            /*          "HTTP/1.1 400 Bad Request\r\n\r\nBad headers"); */
+            /* write(get_client_fd(local_machine), send_buffer, */
+            /*       strlen(send_buffer)); // TODO: add error handling */
+            bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                        "Bad headers");
             set_state(local_machine, ENDING);
-            goto ENDING;
+            should_read = false;
+            break;
           }
         }
-        if (n < BUFFER - 1 && n == cursor.curr &&
+        if (get_state(local_machine) == ENDING)
+          break;
+        if (n < BUFFER - 1 && (size_t)n == cursor.curr &&
             get_http_method(get_route_index(local_machine)) <
                 HTTP_POST) { // GET || DELETE with body
 
-          snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n");
-          write(get_client_fd(local_machine), send_buffer,
-                strlen(send_buffer)); // TODO: add error handling
+          /* snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n");
+           */
+          /* write(get_client_fd(local_machine), send_buffer, */
+          /*       strlen(send_buffer)); // TODO: add error handling */
 
-          goto ENDING;
+          bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
           set_state(local_machine, ENDING);
+          should_read = false;
+          break;
         }
         bzero(cursor.memory, BUFFER);
-        cursor.curr_mem = -1;
+        cursor.curr_mem = 0;
+        cursor.empty_mem = true;
         cursor.offset = cursor.curr;
         printf("headers terminados\n");
         printf("DEBUG: cursor.offset = %zu\n", cursor.offset);
         printf("DEBUG: cursor.curr = %zu\n", cursor.curr);
         printf("DEBUG: cursor.curr_mem = %zu\n", cursor.curr_mem);
-        printf("DEBUG: n = %d\n", n);
+        printf("DEBUG: n = %li\n", n);
         printf("DEBUG: primeros bytes del body: ");
         for (int i = 0; i < 16; i++) {
           printf("%02X ", (unsigned char)read_buffer[cursor.offset + i]);
@@ -539,11 +513,25 @@ void *server_job(void *args) {
         printf("\n");
 
         set_state(local_machine, WORKING);
-        api_jump_table(&cursor, local_machine, read_buffer);
       } else {
-        break;
+        should_read = true;
+        break; // keep processing headers
       }
+      [[fallthrough]];
     }
+    case WORKING: {
+
+      api_jump_table(&cursor, local_machine, read_buffer);
+      set_state(local_machine, ENDING);
+      [[fallthrough]];
+    }
+    case ENDING: {
+      close(get_client_fd(local_machine));
+      set_state(local_machine, WAITING);
+      break;
+    }
+    default:
+      unreachable();
     }
     if (get_state(local_machine) != WORKING) {
 
@@ -552,8 +540,5 @@ void *server_job(void *args) {
     bzero(send_buffer, BUFFER);
   }
 
-ENDING:
-  close(get_client_fd(local_machine));
-  set_state(local_machine, WAITING);
-  return (void *)0;
+  return nullptr;
 }

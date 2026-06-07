@@ -1,10 +1,15 @@
 #include "../includes/defines.h" // for fperror
+
+#include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h> // for open() function
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h> // for fstat() function
-#include <unistd.h>   // for close() function
+#include <sys/types.h>
+#include <unistd.h> // for close() function
 typedef struct F {
   int fd;
   size_t size;
@@ -34,48 +39,52 @@ int close_file(file *f) {
   f->fd = -1; // Reset fd to indicate that the file is closed
   return 0;
 }
+int attempt_create_dir(const char *path, mode_t mode) {
+  printf("DEBUG: %s\n", __func__);
+  int res = mkdir(path, mode);
+  if (res == -1) {
+    printf("DEBUG: errno:`%d`. strerror:`%s`\n", errno, strerror(errno));
+    if (errno == EEXIST)
+      return 1;
+    return -1;
+  }
+  return 0;
+}
 
 unsigned long long get_biggest_index(const char *path) {
+  printf("DEBUG: %s\n", __func__);
   DIR *dir = opendir(path); // ← Usar el path recibido
   struct dirent *entry;
-  unsigned long long max = 0, num;
-  char *dot, nombre_sin_ext[256];
+  unsigned long long max = 0, num = 0;
+  /* char *dot, nombre_sin_ext[256]; */
 
-  if (!dir) {
-    perror("opendir failed");
-    return 1; // O crear el directorio si no existe
-  }
+  assert(dir);
 
   while ((entry = readdir(dir))) {
+    printf("DEBUG: readdir:`%s`\n", entry->d_name);
     // Ignorar "." y ".."
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
       continue;
-
-    // Copiar el nombre con límite de seguridad
-    strncpy(nombre_sin_ext, entry->d_name, sizeof(nombre_sin_ext) - 1);
-    nombre_sin_ext[sizeof(nombre_sin_ext) - 1] = '\0';
-
-    // Buscar el último punto (extensión)
-    dot = strrchr(nombre_sin_ext, '.');
-    if (dot)
-      *dot = '\0'; // Cortar la extensión
-
-    // Si el nombre está vacío después de quitar extensión, continuar
-    if (nombre_sin_ext[0] == '\0')
+    size_t i = 0;
+    for (; entry->d_name[i] != '\0' && isdigit(entry->d_name[i]); i++)
+      ;
+    if (entry->d_name[i] != '.')
       continue;
+    char *file_name = entry->d_name;
+    file_name[i] = '\0';
 
-    // Convertir solo la parte numérica
-    char *endptr;
-    num = strtoull(nombre_sin_ext, &endptr, 10);
+    num = strtoull(file_name, nullptr, 10);
+    printf("DEBUG: num:`%llu`\n", num);
+    printf("DEBUG: max:`%llu`\n", max);
+    if (num > max) {
+      max = num;
+    } else {
 
-    // Verificar que TODO el nombre (sin extensión) sea número
-    if (*endptr == '\0') {
-      if (num > max)
-        max = num;
-      printf("%s -> %llu\n", entry->d_name, num);
+      num = max;
     }
   }
 
+  printf("DEBUG: final num:`%llu`\n", num);
   closedir(dir);
-  return max;
+  return num;
 }

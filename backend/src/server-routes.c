@@ -1,112 +1,81 @@
 #include "../includes/server-defines.h"
-
+#include <stddef.h>
+#define KEY_VALUE_T_SENTINEL                                                   \
+  (key_value_t) { 0 }
+#define SERVER_ROUTES_T_SENTINEL                                               \
+  (server_routes_t) { 0 }
 typedef struct server_routes_t {
   const char *uri_regex;
-  enum http_methods_t method;
-  key_value_t **params; // TODO: cambiar para contiguidad en memoria
-  key_value_t **headers; // TODO: cambiar para contiguidad en memoria
+  const enum http_methods_t method;
+  const key_value_t *const headers;
 } server_routes_t;
-const server_routes_t *routes = (server_routes_t[]){
+const server_routes_t routes[] = {
     {
-        .uri_regex ="/api/image\\?variant=(thumbnail|compressed|original)[[:space:]]",
+        .uri_regex =
+            "GET "
+            "/api/image\\?variant=(thumbnail|compressed|original)[[:space:]]",
         .method = HTTP_GET,
-        .params = 
-            (key_value_t*[]){
-                &(key_value_t){
-                    .key = "variant=",
-                    .type = PARAM_STRING,
-                    .required = true,
-                    .contents = (const char *[]){"thumbnail", "compressed",
-                                                 "original", NULL},
-                    .validators =
-                        (validator_func_t *[]){
-                            validator_param_key,
-                            validator_param_type,
-                            validator_param_key_content,
-                            NULL,
-                        },
-                },
-                NULL,
-            },
-        .headers =            (key_value_t*[]){
- NULL},
+        .headers = nullptr,
     },
     {
 
-        .uri_regex ="/api/image/cursor\\?current=[[:digit:]]+&limit=[[:digit:]]+[[:space:]]",
+        .uri_regex =
+            "GET "
+            "/api/image/"
+            "cursor\\?current=[[:digit:]]+&limit=[[:digit:]]+[[:space:]]",
 
         .method = HTTP_GET,
-        .params =
-            (key_value_t*[]){
-                &(key_value_t){
-                    .key = "current=",
-                    .type = PARAM_INT,
-                    .required = true,
-                    .validators =
-                        (validator_func_t *[]){
-                            validator_param_key,
-                            validator_param_type,
-                            NULL,
-                        },
-                },
-                &(key_value_t){
-                    .key = "limit=",
-                    .type = PARAM_INT,
-                    .required = true,
-                    .validators =
-                        (validator_func_t *[]){
-                            validator_param_key,
-                            validator_param_type,
-                            NULL,
-                        },
-                },
-
-                NULL,
-            },
-
         .headers =
-            (key_value_t*[]){
-                &(key_value_t){
+            (const key_value_t[]){
+                {
                     .key = "Connection:",
                     .required = true,
-        .contents = (const char *[]){":[[:space:]]Keep-Alive",NULL},
-                    .validators = (validator_func_t *[]){validator_header_key,validator_header_content,NULL},
+                    .contents =
+                        (const char *[]){":[[:space:]]Keep-Alive", nullptr},
+                    .validators =
+                        (validator_func_t *[]){validator_header_key,
+                                               validator_header_content,
+                                               nullptr},
                 },
-                &(key_value_t){
+                {
                     .key = "Keep-Alive:",
                     .required = true,
-        .contents = (const char *[]){":[[:space:]]timeout=[[:digit:]]+,","max=[[:digit:]]+",NULL},
-                    .validators = (validator_func_t *[]){validator_header_key,validator_header_content,},
+                    .contents =
+                        (const char *[]){":[[:space:]]timeout=[[:digit:]]+,",
+                                         "max=[[:digit:]]+", nullptr},
+                    .validators =
+                        (validator_func_t *[]){validator_header_key,
+                                               validator_header_content,
+                                               nullptr},
                 },
-                NULL,
+                {0},
             },
     },
     {
 
-        .uri_regex = "/api/image[[:space:]]",
+        .uri_regex = "POST /api/image[[:space:]]",
 
         .method = HTTP_POST,
-        .params =
-            (key_value_t*[]){
-                NULL,
-            },
-
         .headers =
-            (key_value_t*[]){
-                &(key_value_t){
+            (const key_value_t[]){
+                {
                     .key = "Content-Length:",
                     .required = true,
-        .contents = (const char *[]){":[[:space:]][[:digit:]]+",NULL},
-                    .validators = (validator_func_t *[]){validator_header_key,validator_header_content, NULL},
+                    .contents =
+                        (const char *[]){":[[:space:]][[:digit:]]+", nullptr},
+                    .validators =
+                        (validator_func_t *[]){validator_header_key,
+                                               validator_header_content,
+                                               nullptr},
                 },
-                NULL,
+                {0},
             },
     },
-    { NULL }, // SENTINEL VALUE
+    {0}, // SENTINEL VALUE
 };
 
-enum http_methods_t get_http_method(size_t index){
+enum http_methods_t get_http_method(size_t index) {
   printf("DEBUG: %s\n", __func__);
   // TODO: out of bounds check
-  return  routes[index].method;
+  return routes[index].method;
 }

@@ -1,8 +1,9 @@
 #include "../includes/list.h"
 #include <assert.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
-#include <string.h>
+#include <strings.h>
 typedef enum server_states {
   WAITING,
   PROCESSING_REQUEST_LINE,
@@ -23,32 +24,40 @@ void server_machine_init(server_machine *machine) {
   list_new(&machine->params);
 }
 
-server_states get_state(server_machine *machine) { return machine->state; }
-int get_client_fd(server_machine *machine) { return machine->client_fd; }
-size_t get_route_index(server_machine *machine) { return machine->route_idx; }
+inline server_states get_state(const server_machine *machine) {
+  return machine->state;
+}
+inline int get_client_fd(const server_machine *machine) {
+  return machine->client_fd;
+}
+inline size_t get_route_index(const server_machine *machine) {
+  return machine->route_idx;
+}
 
-void set_state(server_machine *machine, server_states state) {
+inline void set_state(server_machine *machine, server_states state) {
   machine->state = state;
 }
-void set_route_index(server_machine *machine, size_t route_index) {
+inline void set_route_index(server_machine *machine, size_t route_index) {
   machine->route_idx = route_index;
 }
-bool add_header(server_machine *machine, char *header) {
-  assert(&machine->headers != NULL);
+bool add_header(server_machine *machine, const char *header) {
+  if (machine == nullptr || header == nullptr)
+    return false;
 
   printf("DEBUG: adding header %s", header);
   list_append(&machine->headers, (void *)header);
 
   return true;
 }
-bool add_params(server_machine *machine, char *uri) {
-  assert(&machine->params != NULL);
+bool add_params(server_machine *machine, const char *uri) {
+  if (machine == nullptr || uri == nullptr)
+    return false;
 
   list_append(&machine->params, (void *)uri);
   return true;
 }
-const char *get_header(server_machine *machine, const char *header_name) {
-  list_t *headers = &machine->headers; // Simplificar
+const char *get_header(const server_machine *machine, const char *header_name) {
+  const list_t *headers = &machine->headers; // Simplificar
 
   for (size_t i = 0; i < headers->len; i++) {
     const char *cur_head = (const char *)headers->array[i];
@@ -56,7 +65,7 @@ const char *get_header(server_machine *machine, const char *header_name) {
 
     // Buscar ':' en el header
     const char *colon = strchr(cur_head, ':');
-    if (colon == NULL)
+    if (colon == nullptr)
       continue;
 
     // Comparar el key (hasta ':') con header_name
@@ -67,6 +76,8 @@ const char *get_header(server_machine *machine, const char *header_name) {
                                         // debe extraer el valor después de ':'
     }
   }
-  return NULL;
+  return nullptr;
 }
-void set_client_fd(server_machine *machine, int fd) { machine->client_fd = fd; }
+inline void set_client_fd(server_machine *machine, int fd) {
+  machine->client_fd = fd;
+}
