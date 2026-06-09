@@ -18,7 +18,7 @@
 
 ssize_t seek_separator(const char *params) {
   for (size_t i = 0; params[i] != '\0'; i++) {
-    if (params[i] == '&' || params[i] == ' ') {
+    if (params[i] == '&') {
       return i;
     }
   }
@@ -249,16 +249,28 @@ void *server_job(void *args) {
       for (; url[j] != '\0' && url[j] != '?' && url[j] != ' '; j++) {
       }
       if (url[j] == '?') {
+        printf("DEBUG: URL has query parameters\n");
 
         char *param = url + j + 1;
-        param++;
         ssize_t idx = 0;
         for (; (idx = seek_separator(param)) != -1;) {
           char *p = param;
           p[idx] = '\0';
+          printf("DEBUG: adding param %s\n", p);
           add_params(local_machine, p);
           param += idx + 1;
         }
+        for (size_t i = 0; param[i] != '\0'; i++) {
+          if (param[i] == ' ') {
+            printf("DEBUG: found space in param, terminating param string\n");
+            idx = i;
+            break;
+          }
+        }
+        char *p = param;
+        p[idx] = '\0';
+        printf("DEBUG: adding param out %s\n", p);
+        add_params(local_machine, p);
       }
 
       // in order to have it when processing the request
@@ -345,8 +357,8 @@ void *server_job(void *args) {
 
             printf("[+] Header=%s\n", cursor.memory);
             size_t i = 0;
-            for (auto header = THIS_ROUTE.headers; header->key != nullptr;
-                 i++, header++) {
+            for (auto header = THIS_ROUTE.headers;
+                 header && header->key != nullptr; i++, header++) {
               printf("DEBUG: completed_headers: %lu\n", completed_headers);
               printf("DEBUG: completed_headers & ((size_t)1 << i -> %lu & "
                      "((size_t)1 << %lu = %lu \n",
@@ -466,7 +478,7 @@ void *server_job(void *args) {
           skips == 4) { // double CRLF found, end of headers
 
         size_t k = 0;
-        for (auto header = THIS_ROUTE.headers; header->key != nullptr;
+        for (auto header = THIS_ROUTE.headers; header && header->key != nullptr;
              k++, header++) {
           printf("DEBUG: validating all headers required were given\n");
           if ((completed_headers & ((size_t)1 << k)) != 1 && header->required) {

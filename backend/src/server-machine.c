@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <strings.h>
 typedef enum server_states {
   WAITING,
@@ -80,4 +81,29 @@ const char *get_header(const server_machine *machine, const char *header_name) {
 }
 inline void set_client_fd(server_machine *machine, int fd) {
   machine->client_fd = fd;
+}
+const char *get_param(const server_machine *machine, const char *param_name) {
+  const list_t *params = &machine->params; // Simplificar
+
+  for (size_t i = 0; i < params->len; i++) {
+    const char *cur_param = (const char *)params->array[i];
+    printf("DEBUG: checking param '%s' against '%s'\n", cur_param, param_name);
+
+    // Buscar '=' en el param
+    const char *equal_sign = strchr(cur_param, '=');
+    if (equal_sign == nullptr) //?
+      continue;
+
+    // Comparar el key (hasta '=') con param_name
+    size_t key_len = equal_sign - cur_param;
+    if (strncasecmp(cur_param, param_name, key_len) == 0) {
+      return equal_sign + 1;
+      // Retornar el valor (después de '=' y espacios)
+      /* return machine->params.array[i]; // Retorna el param completo, el
+       * caller */
+
+      // debe extraer el valor después de '='
+    }
+  }
+  return nullptr;
 }

@@ -1,0 +1,81 @@
+main.perf.out  659040 42565.502900:          1 cpu/cycles/Pu: 
+	ffffffff89001280 [unknown] ([unknown])
+	    7f99d35e9300 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502915:          1 cpu/cycles/Pu: 
+	ffffffff89001280 [unknown] ([unknown])
+	    7f99d35e9300 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502921:          1 cpu/cycles/Pu: 
+	ffffffff8a50d674 [unknown] ([unknown])
+	ffffffff896ab1d7 [unknown] ([unknown])
+	ffffffff89345a4c [unknown] ([unknown])
+	ffffffff8a53e910 [unknown] ([unknown])
+	ffffffff890012a6 [unknown] ([unknown])
+	    7f99d35e9ef7 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502929:          3 cpu/cycles/Pu: 
+	    7f99d35e9fde [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502932:         17 cpu/cycles/Pu: 
+	ffffffff8a50d91a [unknown] ([unknown])
+	ffffffff896ab1d7 [unknown] ([unknown])
+	ffffffff89345a4c [unknown] ([unknown])
+	ffffffff8a53e910 [unknown] ([unknown])
+	ffffffff890012a6 [unknown] ([unknown])
+	    7f99d35ea137 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502937:         86 cpu/cycles/Pu: 
+	ffffffff89001280 [unknown] ([unknown])
+	    7f99d35ea137 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502943:        950 cpu/cycles/Pu: 
+	ffffffff896bd110 [unknown] ([unknown])
+	ffffffff89345a87 [unknown] ([unknown])
+	ffffffff8a53e910 [unknown] ([unknown])
+	ffffffff890012a6 [unknown] ([unknown])
+	    7f99d35ea447 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502956:       6278 cpu/cycles/Pu: 
+	    7f99d35de9b6 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e8d3c [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35ea4c1 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.502974:      38350 cpu/cycles/Pu: 
+	ffffffff89001280 [unknown] ([unknown])
+	    7f99d35eb189 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e8d96 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35ea4c1 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42565.503134:     127449 cpu/cycles/Pu: 
+	    7f99d35da002 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35dbfb1 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35ec372 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e8d96 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35ea4c1 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+	    7f99d35e9308 [unknown] (/usr/lib/ld-linux-x86-64.so.2)
+
+main.perf.out  659040 42568.122404:     329825 cpu/cycles/Pu: 
+	ffffffff8944ad08 [unknown] ([unknown])
+	ffffffff896cf55b [unknown] ([unknown])
+	ffffffff896cf73f [unknown] ([unknown])
+	ffffffff896bc54a [unknown] ([unknown])
+	ffffffff896bd137 [unknown] ([unknown])
+	ffffffff89345a87 [unknown] ([unknown])
+	ffffffff8a53e910 [unknown] ([unknown])
+	ffffffff890012a6 [unknown] ([unknown])
+	    7f99d32a76bb [unknown] (/usr/lib/libc.so.6)
+	    7f99d32a7df0 [unknown] (/usr/lib/libc.so.6)
+	    7f99d32fb2ce [unknown] (/usr/lib/libc.so.6)
+	    7f99d32fd211 [unknown] (/usr/lib/libc.so.6)
+	    7f99d3302fca __regexec+0x9a (inlined)
+	    55c0afd8b0ab check_regex+0x5b (/home/honey/proyectos/hermit-purple/backend/test/main.perf.out)
+	5b6567616d692f69 [unknown] ([unknown])
+

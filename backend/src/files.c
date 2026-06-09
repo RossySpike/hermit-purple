@@ -88,3 +88,26 @@ unsigned long long get_biggest_index(const char *path) {
   closedir(dir);
   return num;
 }
+
+file open_img_at(const char *id, const char *path) {
+  DIR *dir = opendir(path); // ← Usar el path recibido
+  struct dirent *entry;
+  unsigned long long max = 0, num = 0;
+  assert(dir);
+  file f = {0};
+
+  while ((entry = readdir(dir))) {
+    size_t i = 0;
+    for (; entry->d_name[i] != '\0' && isdigit(entry->d_name[i]); i++)
+      ;
+    if (i > 0 && strncmp(entry->d_name, id, i) == 0) {
+      char b[BUFFER] = {0};
+      snprintf(b, sizeof(b), "%s%s", path, entry->d_name);
+      open_file(&f, b, O_RDONLY);
+
+      break;
+    }
+  }
+  closedir(dir);
+  return f; // not found.
+}

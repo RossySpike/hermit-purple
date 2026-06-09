@@ -34,7 +34,8 @@ int main() {
   printf("Server initialized successfully.\n");
   server_machine_init(&this);
 
-  for (;;) {
+  /* for (;;)  */
+  {
     init_client(&s);
 
     set_client_fd(&this, s.client_fd);

@@ -15,5 +15,6 @@ inline void set_state(server_machine *machine, server_states state);
 inline void set_route_index(server_machine *machine, size_t route_index);
 bool add_header(server_machine *machine, const char *header);
 bool add_params(server_machine *machine, const char *uri);
+const char *get_param(const server_machine *machine, const char *param_name);
 
 #endif // SERVER_MACHINE_H

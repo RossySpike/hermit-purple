@@ -1,4 +1,5 @@
 #include "../includes/common-response.h"
+#include "../includes/files.h"
 #include "../includes/server-defines.h"
 #include "../includes/server-machine.h"
 #include <assert.h>
@@ -6,9 +7,11 @@
 #include <fcntl.h> // for open() function
 #include <stddef.h>
 #include <stdio.h>
-#include <strings.h>    //bzero
+#include <strings.h> //bzero
+#include <sys/sendfile.h>
 #include <sys/socket.h> // recv
 #include <sys/time.h>
+#include <unistd.h> // for close() function
 
 size_t veces_ft = 0;
 /**
@@ -16,6 +19,7 @@ curl -X POST -H "Content-Length: $(wc -c < yo.jpeg)" --data-binary @yo.jpeg
 http:/localhost:1600/api/image
 
 */
+void *get_api_image(server_machine *machine, char *read_buffer);
 void *post_api_image(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer);
 void *api_jump_table(stream_cursor *cursor, server_machine *machine,
@@ -23,15 +27,14 @@ void *api_jump_table(stream_cursor *cursor, server_machine *machine,
   size_t id = get_route_index(machine);
   switch (id) {
   case 0:
-    return nullptr;
+    return get_api_image(machine, read_buffer);
   case 1:
     return nullptr;
   case 2:
     return post_api_image(cursor, machine, read_buffer);
-  case 3: {
+  case 3:
 
     return nullptr;
-  }
   default:
     unreachable();
   }
@@ -97,6 +100,34 @@ const char *file_extension(SUPPORTED_FILETYPE ft) {
   default:
     return "unknown";
   }
+}
+
+void *get_api_image(server_machine *machine, char *read_buffer) {
+  const char *param = get_param(machine, "variant");
+  assert(param != nullptr);
+  const char *img_id = get_param(machine, "id");
+  printf("DEBUG: variant param = %s\n", param);
+  printf("DEBUG: id param = %s\n", img_id);
+  assert(img_id != nullptr);
+  file f = {0};
+  if (strcasecmp(param, "original") == 0) {
+    printf("DEBUG: fetching original image with id %s\n", img_id);
+    f = open_img_at(img_id, IMG_ORIGINAL_DIR);
+  } else {
+    bad_request(get_client_fd(machine), BUFFER, nullptr, "Unsupported variant");
+    set_state(machine, ENDING);
+    return nullptr;
+  }
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %lu\r\n\r\n",
+           "Server", HOST_NAME, "Content-Length", f.size);
+  write(get_client_fd(machine), buffer, strlen(buffer));
+  assert(sendfile(get_client_fd(machine), f.fd, nullptr, f.size) == f.size);
+  if (f.fd > 0) {
+    close(f.fd);
+  }
+
+  return nullptr;
 }
 
 // Must have processed headers
@@ -178,7 +209,8 @@ void *post_api_image(stream_cursor *cursor, server_machine *machine,
     /* snprintf(send_buffer, BUFFER, "HTTP/1.1 500 Internal Server
      * Error\r\n\r\n"); */
     /* write(get_client_fd(local_machine), send_buffer, strlen(send_buffer)); */
-    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
     goto cleanup;
   }
 
@@ -207,7 +239,8 @@ void *post_api_image(stream_cursor *cursor, server_machine *machine,
       /* snprintf(send_buffer, BUFFER, */
       /*          "HTTP/1.1 500 Internal Server Error\r\n\r\n"); */
 
-      internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+      internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                            nullptr);
       break;
     } else {
       perror("read");
