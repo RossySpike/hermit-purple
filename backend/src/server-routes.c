@@ -24,31 +24,31 @@ const server_routes_t routes[] = {
         .method = HTTP_GET,
         .headers = 
     nullptr,
-    /*         (const key_value_t[]){ */
-    /*             { */
-    /*                 .key = "Connection:", */
-    /*                 .required = true, */
-    /*                 .contents = */
-    /*                     (const char *[]){":[[:space:]]Keep-Alive", nullptr}, */
-    /*                 .validators = */
-    /*                     (validator_func_t *[]){validator_header_key, */
-    /*                                            validator_header_content, */
-    /*                                            nullptr}, */
-    /*             }, */
-    /*             { */
-    /*                 .key = "Keep-Alive:", */
-    /*                 .required = true, */
-    /*                 .contents = */
-    /*                     (const char *[]){":[[:space:]]timeout=[[:digit:]]+,", */
-    /*                                      "max=[[:digit:]]+", nullptr}, */
-    /*                 .validators = */
-    /*                     (validator_func_t *[]){validator_header_key, */
-    /*                                            validator_header_content, */
-    /*                                            nullptr}, */
-    /*             }, */
-    /*             {0}, */
-    /*         }, */
-    /* }, */
+            /* (const key_value_t[]){ */
+            /*     { */
+            /*         .key = "Connection:", */
+            /*         .required = true, */
+            /*         .contents = */
+            /*             (const char *[]){":[[:space:]]Keep-Alive", nullptr}, */
+            /*         .validators = */
+            /*             (validator_func_t *[]){validator_header_key, */
+            /*                                    validator_header_content, */
+            /*                                    nullptr}, */
+            /*     }, */
+            /*     { */
+            /*         .key = "Keep-Alive:", */
+            /*         .required = true, */
+            /*         .contents = */
+            /*             (const char *[]){":[[:space:]]timeout=[[:digit:]]+,", */
+            /*                              "max=[[:digit:]]+", nullptr}, */
+            /*         .validators = */
+            /*             (validator_func_t *[]){validator_header_key, */
+            /*                                    validator_header_content, */
+            /*                                    nullptr}, */
+            /*     }, */
+            /*     {0}, */
+            /* }, */
+    },
     {
 
         .uri_regex = "POST /api/image[[:space:]]",

@@ -2,6 +2,7 @@
 #include "./includes/server-defines.h"
 #include "./src/server.c"
 #include <assert.h>
+#include <signal.h>
 server_machine machine = {0};
 #define this machine
 
@@ -19,6 +20,7 @@ unsigned long long get_idx() {
 }
 
 int main() {
+  signal(SIGPIPE, SIG_IGN);
   int res = attempt_create_dir(IMG_ORIGINAL_DIR, S_IRUSR | S_IWUSR | S_IXUSR);
   assert(res != -1);
 
@@ -34,8 +36,7 @@ int main() {
   printf("Server initialized successfully.\n");
   server_machine_init(&this);
 
-  /* for (;;)  */
-  {
+  for (;;) {
     init_client(&s);
 
     set_client_fd(&this, s.client_fd);

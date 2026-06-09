@@ -11,9 +11,15 @@
 #include <sys/sendfile.h>
 #include <sys/socket.h> // recv
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h> // for close() function
 
-size_t veces_ft = 0;
+// This will be sent to the client when getting /api/image/cursor
+typedef struct [[gnu::packed]] img_metadata {
+  unsigned short idx;
+  unsigned long long img_id;
+  unsigned long long img_size;
+} img_metadata; // 18 bytes (linux x86-64)
 /**
 curl -X POST -H "Content-Length: $(wc -c < yo.jpeg)" --data-binary @yo.jpeg
 http:/localhost:1600/api/image
@@ -22,6 +28,7 @@ http:/localhost:1600/api/image
 void *get_api_image(server_machine *machine, char *read_buffer);
 void *post_api_image(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer);
+void *get_api_image_cursor(server_machine *machine);
 void *api_jump_table(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer) {
   size_t id = get_route_index(machine);
@@ -29,7 +36,7 @@ void *api_jump_table(stream_cursor *cursor, server_machine *machine,
   case 0:
     return get_api_image(machine, read_buffer);
   case 1:
-    return nullptr;
+    return get_api_image_cursor(machine);
   case 2:
     return post_api_image(cursor, machine, read_buffer);
   case 3:
@@ -122,7 +129,14 @@ void *get_api_image(server_machine *machine, char *read_buffer) {
   snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %lu\r\n\r\n",
            "Server", HOST_NAME, "Content-Length", f.size);
   write(get_client_fd(machine), buffer, strlen(buffer));
-  assert(sendfile(get_client_fd(machine), f.fd, nullptr, f.size) == f.size);
+  ssize_t sent = sendfile(get_client_fd(machine), f.fd, nullptr, f.size);
+  while (f.size - sent > 0) {
+    ssize_t count = f.size - sent;
+    ssize_t s = sendfile(get_client_fd(machine), f.fd, &sent, count);
+    if (s < 0) {
+      break;
+    }
+  }
   if (f.fd > 0) {
     close(f.fd);
   }
@@ -183,7 +197,6 @@ void *post_api_image(stream_cursor *cursor, server_machine *machine,
   ft = validate_file_type(read_buffer, body_offset);
   printf("DEBUG: file type detected: %d\n", ft);
 
-  printf("DEBUG ft: %d | veces: %lu\n", ft, veces_ft++);
   if (ft == FT_UNKNOWN) {
     /* snprintf(send_buffer, BUFFER, */
     /*          "HTTP/1.1 400 Bad Request\r\n\r\nUnsupported file type"); */
@@ -262,5 +275,45 @@ cleanup:
   if (fd >= 0)
     close(fd);
   set_state(local_machine, ENDING);
+  return nullptr;
+}
+void *get_api_image_cursor(server_machine *machine) {
+  const char *current = get_param(machine, "current");
+  assert(current != nullptr);
+  const char *limit = get_param(machine, "limit");
+  assert(limit != nullptr);
+  const unsigned short lim = strtoul(limit, nullptr, 10);
+  assert(lim > 0);
+
+  file *files = malloc(sizeof(file) * lim);
+  unsigned long long *files_ids =
+      open_files_to_arr(IMG_ORIGINAL_DIR, files, (unsigned short *const)&lim,
+                        strtoul(current, nullptr, 10));
+  assert(files_ids != nullptr);
+  img_metadata *metadata = malloc(sizeof(img_metadata) * lim);
+  unsigned long long total_size = 0;
+  for (unsigned short i = 0; i < lim && files_ids[i] != 0; i++) {
+    total_size += files[i].size;
+  }
+  total_size += sizeof(img_metadata) * lim;
+
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %llu\r\n\r\n",
+           "Server", HOST_NAME, "Content-Length", total_size);
+  write(get_client_fd(machine), buffer, strlen(buffer));
+  for (unsigned short i = 0; i < lim && files_ids[i] != 0; i++) {
+    metadata[i] = (img_metadata){
+        .idx = i, .img_id = files_ids[i], .img_size = files[i].size};
+    write(get_client_fd(machine), &metadata[i], sizeof(img_metadata));
+    assert(sendfile(get_client_fd(machine), files[i].fd, nullptr,
+                    files[i].size) > 0);
+    if (files[i].fd > 0) {
+      close(files[i].fd);
+    }
+  }
+
+  free(files_ids);
+  free(files);
+  free(metadata);
   return nullptr;
 }

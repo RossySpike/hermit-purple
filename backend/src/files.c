@@ -90,6 +90,7 @@ unsigned long long get_biggest_index(const char *path) {
 }
 
 file open_img_at(const char *id, const char *path) {
+  printf("DEBUG: %s\n", __func__);
   DIR *dir = opendir(path); // ← Usar el path recibido
   struct dirent *entry;
   unsigned long long max = 0, num = 0;
@@ -110,4 +111,56 @@ file open_img_at(const char *id, const char *path) {
   }
   closedir(dir);
   return f; // not found.
+}
+unsigned long long *open_files_to_arr(const char *path, file *const out,
+                                      unsigned short *const n_files,
+                                      unsigned long long start_file_id) {
+  printf("DEBUG: open_files_to_arr\n");
+
+  if (*n_files > start_file_id) {
+    return nullptr; // No hay archivos para abrir el start_file_id es menor que
+                    // n_files
+  }
+  unsigned short arr_idx = 0;
+  unsigned long long *f_names_to_ull =
+      malloc(sizeof(unsigned long long) * (*n_files + 1));
+
+  bool should_exit = false;
+  while (!should_exit && arr_idx < *n_files) {
+    DIR *dir = opendir(path); // ← Usar el path recibido
+    struct dirent *entry;
+    assert(dir);
+    const char curr_filename[21];
+    (const char *)snprintf(curr_filename, sizeof(curr_filename), "%llu",
+                           start_file_id - (arr_idx + 1));
+    printf("DEBUG: Looking for file with name %s\n", curr_filename);
+    printf("DEBUG: arr_idx = %hu\n", arr_idx);
+    printf("DEBUG: start_file_id = %llu\n", start_file_id);
+    printf("DEBUG: n_files = %hu\n", *n_files);
+    printf("start_file_id - (arr_idx + 1): %llu\n",
+           start_file_id - (arr_idx + 1));
+
+    /* && entry != nullptr && arr_idx != *n_files */
+    while ((entry = readdir(dir))) {
+      size_t i = 0;
+      for (; (entry->d_name[i] != '\0' && isdigit(entry->d_name[i])); i++)
+        ;
+
+      if (i > 0 && strncmp(entry->d_name, curr_filename, i) == 0) {
+        printf("DEBUG: Found file with name %s\n", entry->d_name);
+        char b[BUFFER] = {0};
+        snprintf(b, sizeof(b), "%s%s", path, entry->d_name);
+        open_file(&out[arr_idx++], b, O_RDONLY);
+        f_names_to_ull[arr_idx] = arr_idx + start_file_id;
+        break;
+      } else {
+        printf("DEBUG: File with name %s not found\n", curr_filename);
+      }
+    }
+    should_exit = entry == nullptr;
+    closedir(dir);
+  }
+  *n_files = arr_idx;
+  f_names_to_ull[arr_idx] = 0; // Mark the end of the array with a 0
+  return arr_idx == 0 ? nullptr : f_names_to_ull;
 }
