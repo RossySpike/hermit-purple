@@ -1,0 +1,29 @@
+/*** BEGIN file-header ***/
+#ifndef VIPS_ENUM_TYPES_H
+#define VIPS_ENUM_TYPES_H
+
+G_BEGIN_DECLS
+
+/*** END file-header ***/
+
+/*** BEGIN file-production ***/
+/* enumerations from "@basename@" */
+/*** END file-production ***/
+
+/*** BEGIN value-header ***/
+VIPS_API
+GType @enum_name@_get_type(void) G_GNUC_CONST;
+#define VIPS_TYPE_@ENUMSHORT@ (@enum_name@_get_type())
+/*** END value-header ***/
+
+/*** BEGIN file-tail ***/
+/* Deprecated enumerations */
+#ifndef __GI_SCANNER__
+VIPS_API
+GType vips_saveable_get_type(void) G_GNUC_CONST;
+#define VIPS_TYPE_SAVEABLE (vips_saveable_get_type())
+#endif /*__GI_SCANNER__*/
+G_END_DECLS
+
+#endif /*VIPS_ENUM_TYPES_H*/
+/*** END file-tail ***/

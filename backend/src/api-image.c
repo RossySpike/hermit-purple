@@ -13,6 +13,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h> // for close() function
+#include <vips/vips.h>
+#include <vips/vips7compat.h>
 
 // This will be sent to the client when getting /api/image/cursor
 typedef struct [[gnu::packed]] img_metadata {
@@ -29,6 +31,11 @@ void *get_api_image(server_machine *machine, char *read_buffer);
 void *post_api_image(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer);
 void *get_api_image_cursor(server_machine *machine);
+void *get_api_image_cursor_start(server_machine *machine);
+void *options_api_image_cursor(server_machine *machine);
+void *options_api_image(server_machine *machine);
+void *options_post_api_image(server_machine *machine);
+void *options_api_image_cursor_start(server_machine *machine);
 void *api_jump_table(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer) {
   size_t id = get_route_index(machine);
@@ -40,28 +47,34 @@ void *api_jump_table(stream_cursor *cursor, server_machine *machine,
   case 2:
     return post_api_image(cursor, machine, read_buffer);
   case 3:
-
-    return nullptr;
+    return get_api_image_cursor_start(machine);
+  case 4:
+    return options_api_image_cursor_start(machine);
+  case 5:
+    return options_api_image_cursor(machine);
+  case 6:
+    return options_api_image(machine);
+  case 7:
+    return options_post_api_image(machine);
   default:
     unreachable();
   }
 }
 extern unsigned long long get_idx();
+extern unsigned long long get_next_idx();
 typedef enum SUPPORTED_FILETYPE {
-  FT_UNKNOWN = -1, // Valor explicito para error
+  FT_UNKNOWN = -1, // err value
   FT_PNG = 0,
   FT_JPEG,
   FT_HEIC
 } SUPPORTED_FILETYPE;
+/*
+ * assumes stream is big enough
+ * */
 SUPPORTED_FILETYPE validate_file_type(char *stream, size_t start) {
-  printf("DEBUG: %s\n", __func__);
 
   SUPPORTED_FILETYPE ft = FT_UNKNOWN;
   unsigned char *buffer = (unsigned char *)&stream[start];
-
-  // Verificar que tengamos al menos 12 bytes disponibles
-  // (Necesitas pasar el tamaño total o asumir que stream es suficientemente
-  // grande)
 
   // PNG: 89 50 4E 47 0D 0A 1A 0A
   if (buffer[0] == 0x89 && buffer[1] == 0x50 && buffer[2] == 0x4E &&
@@ -72,14 +85,13 @@ SUPPORTED_FILETYPE validate_file_type(char *stream, size_t start) {
 
   // JPEG: FF D8 FF
   if (buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF) {
-    // Puedes verificar el marcador específico (E0, E1, etc.) si quieres
     return FT_JPEG;
   }
 
-  // HEIC/HEIF: busca "ftyp" y luego "heic", "heix", "mif1", "msf1"
+  // HEIC/HEIF: search "ftyp" then "heic", "heix", "mif1", "msf1"
   if (buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 &&
       buffer[7] == 0x70) {
-    // Verificar el brand (major brand)
+    // major brand
     if ((buffer[8] == 0x68 && buffer[9] == 0x65 && buffer[10] == 0x69 &&
          buffer[11] == 0x63) || // heic
         (buffer[8] == 0x68 && buffer[9] == 0x65 && buffer[10] == 0x69 &&
@@ -113,22 +125,25 @@ void *get_api_image(server_machine *machine, char *read_buffer) {
   const char *param = get_param(machine, "variant");
   assert(param != nullptr);
   const char *img_id = get_param(machine, "id");
-  printf("DEBUG: variant param = %s\n", param);
-  printf("DEBUG: id param = %s\n", img_id);
   assert(img_id != nullptr);
   file f = {0};
   if (strcasecmp(param, "original") == 0) {
-    printf("DEBUG: fetching original image with id %s\n", img_id);
     f = open_img_at(img_id, IMG_ORIGINAL_DIR);
+  } else if (strcasecmp(param, "thumbnail") == 0) {
+
+    f = open_img_at(img_id, IMG_THUMBNAIL_DIR);
+  } else if (strcasecmp(param, "compressed") == 0) {
+
+    f = open_img_at(img_id, IMG_CACHE_DIR);
   } else {
     bad_request(get_client_fd(machine), BUFFER, nullptr, "Unsupported variant");
     set_state(machine, ENDING);
     return nullptr;
   }
   char buffer[BUFFER] = {0};
-  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %lu\r\n\r\n",
-           "Server", HOST_NAME, "Content-Length", f.size);
-  write(get_client_fd(machine), buffer, strlen(buffer));
+  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %lu\r\n%s\r\n\r\n",
+           "Server", HOST_NAME, "Content-Length", f.size, cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
   ssize_t sent = sendfile(get_client_fd(machine), f.fd, nullptr, f.size);
   while (f.size - sent > 0) {
     ssize_t count = f.size - sent;
@@ -149,15 +164,13 @@ void *post_api_image(stream_cursor *cursor, server_machine *machine,
                      char *read_buffer) {
   assert(BUFFER > 12);
   server_machine *local_machine = machine;
-  size_t n = 0;
-  char send_buffer[BUFFER] = {0};
+  ssize_t n = 0;
   char filename[BUFFER] = {0};
   int fd = -1;
 
   const char *content_length = get_header(machine, "Content-Length:");
   assert(content_length != nullptr);
 
-  // Buscar ':' en lugar de espacio
   size_t colon_pos = 0;
   while (content_length[colon_pos] != ':' &&
          content_length[colon_pos] != '\0') {
@@ -165,130 +178,245 @@ void *post_api_image(stream_cursor *cursor, server_machine *machine,
   }
 
   if (content_length[colon_pos] != ':') {
-    printf("DEBUG: No se encontró ':' en Content-Length header\n");
-    // No se encontraron dos puntos
-    /* snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n"); */
-    /* write(get_client_fd(local_machine), send_buffer, strlen(send_buffer)); */
-
     bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
     goto cleanup;
   }
 
-  // Avanzar después de ':' y los espacios
   size_t value_start = colon_pos + 1;
   while (content_length[value_start] == ' ' ||
          content_length[value_start] == '\t') {
     value_start++;
   }
 
-  // Convertir el valor numérico
   unsigned long long content_length_val =
       strtoull(content_length + value_start, nullptr, 10);
 
-  printf("DEBUG: Content-Length value = %llu\n", content_length_val);
   SUPPORTED_FILETYPE ft = FT_UNKNOWN;
 
-  // Ya tenemos el body en read_buffer + cursor->curr
-  size_t body_offset = cursor->offset; // 95
-  size_t bytes_en_buffer =
-      BUFFER - 1 - body_offset; // 191 - 95 = 96 bytes del body
+  size_t body_offset = cursor->offset;
+  size_t bytes_en_buffer = BUFFER - 1 - body_offset;
 
-  // Validar tipo
   ft = validate_file_type(read_buffer, body_offset);
-  printf("DEBUG: file type detected: %d\n", ft);
-
   if (ft == FT_UNKNOWN) {
-    /* snprintf(send_buffer, BUFFER, */
-    /*          "HTTP/1.1 400 Bad Request\r\n\r\nUnsupported file type"); */
-    /* write(get_client_fd(local_machine), send_buffer, strlen(send_buffer)); */
     bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                 "Unsuported file type");
     goto cleanup;
   }
 
-  unsigned long long my_idx = get_idx();
+  unsigned long long my_idx = get_next_idx();
   int filename_res = snprintf(filename, BUFFER, "%s%llu.%s", IMG_ORIGINAL_DIR,
                               my_idx, file_extension(ft));
-  if (filename_res > 0) {
 
-    assert((unsigned long long)filename_res < BUFFER);
-  } else {
-    printf("DEBUG: %s remember to handle all values of `snprintf` bc it failed "
-           "with: %d\n",
-           __func__, filename_res);
-  }
-  fd = open(filename, O_CREAT | O_WRONLY | O_APPEND, 0644);
-  if (fd < 0) {
-    /* snprintf(send_buffer, BUFFER, "HTTP/1.1 500 Internal Server
-     * Error\r\n\r\n"); */
-    /* write(get_client_fd(local_machine), send_buffer, strlen(send_buffer)); */
+  if (filename_res < 0 || (unsigned long long)filename_res >= BUFFER) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                           nullptr);
     goto cleanup;
   }
 
-  // Escribir los bytes del body que ya tenemos
-  assert(write(fd, read_buffer + body_offset, bytes_en_buffer));
+  fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
+  if (fd < 0) {
+    perror("[DEBUG] Error en open() de archivo original");
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  ssize_t initial_w = write(fd, read_buffer + body_offset, bytes_en_buffer);
+  if (initial_w < 0) {
+    perror("[DEBUG] Error escribiendo buffer inicial en disco");
+    goto cleanup;
+  }
   content_length_val -= bytes_en_buffer;
 
-  // Leer el resto del body
   bzero(read_buffer, BUFFER);
   struct timeval tv;
   tv.tv_sec = 5;
   tv.tv_usec = 1000;
   setsockopt(get_client_fd(machine), SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv,
              sizeof(tv));
-  while (content_length_val != 0) {
-    n = recv(get_client_fd(machine), read_buffer, BUFFER - 1, MSG_DONTWAIT);
 
-    printf("DEBUG: Content-Length value = %llu\n", content_length_val);
-    printf("DEBUG: n = %lu\n", n);
+  char recv_buffer[BUFFER] = {0};
+  while (content_length_val > 0) {
+    n = recv(get_client_fd(machine), recv_buffer, BUFFER - 1, 0);
+
+    if (n > (ssize_t)content_length_val) {
+      n = content_length_val;
+    }
     if (n > 0) {
-
-      assert(write(fd, read_buffer, n));
+      ssize_t loop_w = write(fd, recv_buffer, n);
+      if (loop_w < 0) {
+        break;
+      }
       content_length_val -= n;
-      bzero(read_buffer, BUFFER);
+      bzero(recv_buffer, BUFFER);
     } else if (n == 0) {
-      /* snprintf(send_buffer, BUFFER, */
-      /*          "HTTP/1.1 500 Internal Server Error\r\n\r\n"); */
-
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             nullptr);
       break;
     } else {
-      perror("read");
       break;
     }
-  } // Will exit when theres an error, I expect either EAGAIN or EWOULDBLOCK
-    // that would mean EOF
-
-  if (content_length_val == 0)
-    /* snprintf(send_buffer, BUFFER, "HTTP/1.1 201 Created\r\n\r\n"); */
-    created(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
-  ssize_t write_res =
-      write(get_client_fd(local_machine), send_buffer, strlen(send_buffer));
-  if (write_res < 0) {
-    fperror;
-    assert(0);
   }
-cleanup:
-  if (fd >= 0)
+
+  if (content_length_val != 0) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  if (lseek(fd, 0, SEEK_SET) == (off_t)-1) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  // IMG TRANSFORMATION
+  VipsSource *source = nullptr;
+  source = vips_source_new_from_descriptor(fd);
+  if (!source) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  VipsImage *in = nullptr;
+  in = vips_image_new_from_source(source, "", NULL);
+  g_object_unref(source);
+  source = nullptr;
+
+  if (!in) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  void *buffer_salida = NULL;
+  size_t tam_salida = 0;
+  int resultado_save = -1;
+
+  resultado_save = vips_webpsave_buffer(in, &buffer_salida, &tam_salida, NULL);
+
+  filename_res = snprintf(filename, BUFFER, "%s%llu.%s", IMG_THUMBNAIL_DIR,
+                          my_idx, "webp");
+  if (filename_res < 0 || filename_res >= BUFFER) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  if (resultado_save != 0) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  int fd_salida = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fd_salida < 0) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    g_free(buffer_salida);
+    goto cleanup;
+  }
+
+  if (write(fd_salida, buffer_salida, tam_salida) < 0) {
+    close(fd_salida);
+    g_free(buffer_salida);
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  close(fd_salida);
+  g_free(buffer_salida);
+
+  // --- JPEG ---
+  buffer_salida = nullptr;
+  tam_salida = 0;
+  resultado_save = -1;
+
+  resultado_save = vips_jpegsave_buffer(in, &buffer_salida, &tam_salida, NULL);
+
+  filename_res =
+      snprintf(filename, BUFFER, "%s%llu.%s", IMG_CACHE_DIR, my_idx, "jpeg");
+
+  if (filename_res < 0 || filename_res >= BUFFER) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  if (resultado_save != 0) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  fd_salida = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fd_salida < 0) {
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    g_free(buffer_salida);
+    goto cleanup;
+  }
+
+  if (write(fd_salida, buffer_salida, tam_salida) < 0) {
+    close(fd_salida);
+    g_free(buffer_salida);
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          nullptr);
+    goto cleanup;
+  }
+
+  close(fd_salida);
+  g_free(buffer_salida);
+
+  g_object_unref(in);
+  in = nullptr;
+
+  if (fd >= 0) {
     close(fd);
+    fd = -1;
+  }
+
+  created(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+
+cleanup:
+  if (in) {
+    g_object_unref(in);
+  }
+  if (fd >= 0) {
+    close(fd);
+  }
   set_state(local_machine, ENDING);
   return nullptr;
 }
 void *get_api_image_cursor(server_machine *machine) {
+
   const char *current = get_param(machine, "current");
   assert(current != nullptr);
+  unsigned long long curr = strtoul(current, nullptr, 10);
+  if (curr == 0) {
+    bad_request(get_client_fd(machine), BUFFER, nullptr,
+                "Invalid current parameter");
+    return nullptr;
+  }
   const char *limit = get_param(machine, "limit");
   assert(limit != nullptr);
   const unsigned short lim = strtoul(limit, nullptr, 10);
-  assert(lim > 0);
+  if (limit == 0 || curr < (unsigned long long)(lim + 1)) {
+    bad_request(get_client_fd(machine), BUFFER, nullptr,
+                "Invalid limit parameter");
+    return nullptr;
+  }
+  if (curr > (get_idx() + 1)) {
+    bad_request(get_client_fd(machine), BUFFER, nullptr,
+                "Current parameter exceeds available images");
+    return nullptr;
+  }
 
   file *files = malloc(sizeof(file) * lim);
-  unsigned long long *files_ids =
-      open_files_to_arr(IMG_ORIGINAL_DIR, files, (unsigned short *const)&lim,
-                        strtoul(current, nullptr, 10));
+  unsigned long long *files_ids = open_files_to_arr(
+      IMG_THUMBNAIL_DIR, files, (unsigned short *const)&lim, curr);
   assert(files_ids != nullptr);
   img_metadata *metadata = malloc(sizeof(img_metadata) * lim);
   unsigned long long total_size = 0;
@@ -298,13 +426,14 @@ void *get_api_image_cursor(server_machine *machine) {
   total_size += sizeof(img_metadata) * lim;
 
   char buffer[BUFFER] = {0};
-  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %llu\r\n\r\n",
-           "Server", HOST_NAME, "Content-Length", total_size);
-  write(get_client_fd(machine), buffer, strlen(buffer));
+  snprintf(buffer, BUFFER,
+           "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %llu\r\n%s\r\n\r\n", "Server",
+           HOST_NAME, "Content-Length", total_size, cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
   for (unsigned short i = 0; i < lim && files_ids[i] != 0; i++) {
     metadata[i] = (img_metadata){
         .idx = i, .img_id = files_ids[i], .img_size = files[i].size};
-    write(get_client_fd(machine), &metadata[i], sizeof(img_metadata));
+    assert(write(get_client_fd(machine), &metadata[i], sizeof(img_metadata)));
     assert(sendfile(get_client_fd(machine), files[i].fd, nullptr,
                     files[i].size) > 0);
     if (files[i].fd > 0) {
@@ -313,7 +442,54 @@ void *get_api_image_cursor(server_machine *machine) {
   }
 
   free(files_ids);
+  files_ids = nullptr;
   free(files);
+  files = nullptr;
   free(metadata);
+  metadata = nullptr;
+  return nullptr;
+}
+void *options_api_image_cursor(server_machine *machine) {
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 204 No Content\r\n%s: %s\r\n%s\r\n",
+           "Server", HOST_NAME, cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
+  return nullptr;
+}
+void *options_api_image(server_machine *machine) {
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 204 No Content\r\n%s: %s\r\n%s\r\n",
+           "Server", HOST_NAME, cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
+  return nullptr;
+}
+void *options_post_api_image(server_machine *machine) {
+  char buffer[BUFFER] = {0};
+  const char *const _cors_headers =
+      "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: "
+      "POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, "
+      "Accept\r\nAccess-Control-Expose-Headers: Content-Length, "
+      "Content-Type";
+
+  snprintf(buffer, BUFFER, "HTTP/1.1 204 No Content\r\n%s: %s\r\n%s\r\n",
+           "Server", HOST_NAME, _cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
+  return nullptr;
+}
+
+void *get_api_image_cursor_start(server_machine *machine) {
+
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s\r\n\r\n%llu",
+           "Server", HOST_NAME, cors_headers, get_idx() + 1);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
+  return nullptr;
+}
+void *options_api_image_cursor_start(server_machine *machine) {
+
+  char buffer[BUFFER] = {0};
+  snprintf(buffer, BUFFER, "HTTP/1.1 204 No Content\r\n%s: %s\r\n%s\r\n",
+           "Server", HOST_NAME, cors_headers);
+  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
   return nullptr;
 }

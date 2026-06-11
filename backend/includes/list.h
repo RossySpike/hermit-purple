@@ -1,7 +1,11 @@
 #ifndef LIST_H
 #define LIST_H
-#include "../src/list.c"
-typedef struct DYNAMIC_LIST_STRUCT list_t;
+#include <stddef.h>
+typedef struct DYNAMIC_LIST_STRUCT {
+  size_t capacity;
+  size_t len;
+  void **array;
+} list_t;
 
 /* array should be freed */
 void list_new(list_t *new_list);

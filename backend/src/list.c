@@ -1,11 +1,6 @@
+#include "../includes/list.h"
 #include <assert.h>
 #include <stdlib.h>
-
-typedef struct DYNAMIC_LIST_STRUCT {
-  size_t capacity;
-  size_t len;
-  void **array;
-} list_t;
 
 void list_new(list_t *new_list) {
   new_list->capacity = 1;
@@ -63,7 +58,8 @@ void list_free(list_t *l, void (*callback)(void *)) {
       callback(l->array[i]);
     l->array[i] = nullptr;
   }
-  free(l->array);
+  if (l->array != nullptr)
+    free(l->array);
   l->array = nullptr;
   l->capacity = 0;
   l->len = 0;

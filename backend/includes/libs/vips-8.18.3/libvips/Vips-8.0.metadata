@@ -1,0 +1,39 @@
+Object.new_from_string.object_class type="GLib.ObjectClass"
+Object.print_summary_class.klass type="GLib.ObjectClass"
+ArgumentClass.object_class type="GLib.ObjectClass"
+class_find type="GLib.ObjectClass"
+ClassMapFn.cls type="GLib.ObjectClass"
+ArgumentClassMapFn.object_class type="GLib.ObjectClass"
+ArgumentTable type="GLib.HashTable<GLib.ParamSpec,Vips.Argument?>"
+
+ArrayDouble.newv skip=false
+ArrayImage.newv skip=false
+ArrayInt.newv skip=false
+
+Image.*#method skip=false
+Image.eval#virtual_method name="eval_impl"
+Image.invalidate#virtual_method name="invalidate_impl"
+Image.minimise#virtual_method name="minimise_impl"
+Image.posteval#virtual_method name="posteval_impl"
+Image.preeval#virtual_method name="preeval_impl"
+Image.written#virtual_method name="written_impl"
+Image.written#virtual_method.result out
+Image.set_area.free_fn closure=-1 destroy=-1
+
+Object.close#virtual_method name="close_impl"
+Object.postbuild#virtual_method name="postbuild_impl"
+Object.postclose#virtual_method name="postclose_impl"
+Object.preclose#virtual_method name="preclose_impl"
+Object.preclose#method name="do_preclose"
+Object.sanity#virtual_method name="sanity_impl"
+_object_set_member name="set_member" parent="Vips.Object" symbol_type="method" instance_idx=0
+
+value_set_blob.free_fn closure=-1 destroy=-1
+value_set_area.free_fn closure=-1 destroy=-1
+Area.new.free_fn closure=-1 destroy=-1
+
+cache_* skip=false name="cache_(.+)" parent="Vips.Cache"
+col_* skip=false name="col_(.+)" parent="Vips.ColorUtils"
+tracked_* skip=false name="tracked_(.+)" parent="Vips.Tracked"
+check_* skip=false parent="Vips.Utils"
+value_* skip=false name="value_(.+)" parent="Vips.Value"

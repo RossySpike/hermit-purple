@@ -17,10 +17,16 @@
 #define HTTP_VERSION "HTTP/1.1"
 
 #define IMG_ORIGINAL_DIR "/tmp/original/"
+#define IMG_THUMBNAIL_DIR "/tmp/thumbnail/"
+#define IMG_CACHE_DIR "/tmp/cache/"
 
-enum http_methods_t { HTTP_GET, HTTP_DELETE, HTTP_POST, HTTP_PUT };
+enum http_methods_t {
+  HTTP_GET,
+  HTTP_DELETE,
+  HTTP_POST,
+  HTTP_PUT,
+  HTTP_OPTIONS
+};
 typedef enum CONTENT_TYPE { TEXT_PLAIN, CURSOR_BINARY_FORMAT } CONTENT_TYPE;
-const char *content_type_value[] = {"text/plain",
-                                    "application/cursor-binary-format"};
-
+extern const char *content_type_value;
 #endif // !#ifndef SERVER_DEFINES_H

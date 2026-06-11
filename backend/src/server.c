@@ -1,12 +1,13 @@
+#include "../includes/server.h"
+#include "../includes/api-image.h"
 #include "../includes/common-response.h"
 #include "../includes/defines.h" // for fperror,  bzero macros.
 #include "../includes/http-sanitize.h" // for __http_sanitize_key_value_t struct, validator functions.
 #include "../includes/server-defines.h" // for  BUFFER, PORT, BACKLOG, macros; http_methods_t enum.
-#include "../src/api-image.c"
-#include "../src/server-routes.c"
+#include "../includes/server-routes.h"
 #include <asm-generic/socket.h>
-#include <fcntl.h>      // for open() function
-#include <netinet/in.h> // for sockaddr_in structure.
+#include <assert.h>
+#include <fcntl.h> // for open() function
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -15,7 +16,6 @@
 #include <sys/socket.h> // for socket() function.
 #include <sys/stat.h>   // for fstat() function
 #include <sys/types.h>  // for types.
-
 ssize_t seek_separator(const char *params) {
   for (size_t i = 0; params[i] != '\0'; i++) {
     if (params[i] == '&') {
@@ -24,19 +24,8 @@ ssize_t seek_separator(const char *params) {
   }
   return -1;
 }
-typedef struct SERVER_ADDR {
-  struct sockaddr_in addr;
-  socklen_t len;
-} server_addr;
-
-typedef struct SERVER {
-  int server_fd;
-  int client_fd;
-  server_addr addr;
-} server;
 
 int init_server_addr(server_addr *saddr) {
-  printf("DEBUG: %s\n", __func__);
   saddr->len = sizeof(saddr->addr);
   bzero(saddr, saddr->len);
   saddr->addr.sin_family = AF_INET;
@@ -46,7 +35,6 @@ int init_server_addr(server_addr *saddr) {
 }
 
 int init_sock_server(server *s) {
-  printf("DEBUG: %s\n", __func__);
   int optval = 1;
   s->server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (s->server_fd < 0) {
@@ -74,20 +62,15 @@ int init_sock_server(server *s) {
 }
 // 3
 int init_server(server *s) {
-  printf("DEBUG: %s\n", __func__);
-  printf("Initialazing server state...\n");
   if (init_server_addr(&s->addr) < 0) {
     return -1;
   }
   if (init_sock_server(s) < 0) {
     return -1;
   }
-  printf("Server initialized successfully.\n");
   return 0;
 }
 int init_client(server *s) {
-  printf("DEBUG: %s\n", __func__);
-  printf("Waiting for client connection on PORT:%d...\n", PORT);
   s->client_fd =
       accept(s->server_fd, (struct sockaddr *)&s->addr.addr, &s->addr.len);
   if (s->client_fd < 0) {
@@ -95,11 +78,9 @@ int init_client(server *s) {
     close(s->server_fd);
     return -1;
   }
-  printf("Client connected successfully.\n");
   return 0;
 }
 int destroy_server(server *s) {
-  printf("DEBUG: %s\n", __func__);
   if (s->client_fd >= 0) {
     close(s->client_fd);
     s->client_fd = -1;
@@ -108,7 +89,6 @@ int destroy_server(server *s) {
     close(s->server_fd);
     s->client_fd = -1;
   }
-  printf("Server destroyed successfully.\n");
   return 0;
 }
 
@@ -126,7 +106,6 @@ int destroy_server(server *s) {
  * - Stores the position where the URL starts in start_url.
  */
 enum http_methods_t get_method(char *r, size_t *start_url) {
-  printf("DEBUG: %s\n", __func__);
   char *first_space = strchr(r, ' ');
   if (first_space == nullptr) {
     return -1; // No space found, invalid request
@@ -149,12 +128,14 @@ enum http_methods_t get_method(char *r, size_t *start_url) {
     return HTTP_PUT; // PUT method
   } else if (strcmp(method, "DELETE") == 0) {
     return HTTP_DELETE; // DELETE method
+  } else if (strcmp(method, "OPTIONS") == 0) {
+    return HTTP_OPTIONS; // OPTIONS method
   } else {
     return -1; // Unknown method
   }
 }
 
-#define THIS_ROUTE (routes[get_route_index(local_machine)])
+#define THIS_ROUTE (get_routes()[get_route_index(local_machine)])
 
 /**
  * Finds the index of the server_routes_t with a matching uri_regex.
@@ -165,21 +146,17 @@ enum http_methods_t get_method(char *r, size_t *start_url) {
  * @return The index of the matching server_routes_t, or -1 if not found.
  */
 ssize_t check_url(const char *url) {
-  printf("DEBUG: %s\n", __func__);
-  const server_routes_t *local_routes = routes;
+  const server_routes_t *local_routes = get_routes();
 
   for (size_t i = 0; local_routes[i].uri_regex != nullptr; i++) {
-    printf("Patron: %s \n", local_routes[i].uri_regex);
-    int res = check_regex(url, local_routes[i].uri_regex);
+    int res = check_regex_with_regex(url, &local_routes[i].compiled_uri_regex);
     if (res == 1) {
-      printf("hallada con patron %s\n", local_routes[i].uri_regex);
       return i; // TODO: change
     } else if (res == -1) {
       perror("FALLO EL PATRON");
       exit(1);
     }
   }
-  printf("no hallada\n");
 
   return -1;
 }
@@ -187,7 +164,6 @@ ssize_t check_url(const char *url) {
 // TODO: Check
 
 void *server_job(void *args) {
-  printf("DEBUG: %s\n", __func__);
   server_machine *local_machine = (server_machine *)args;
 
   char send_buffer[BUFFER] = {0};
@@ -201,13 +177,12 @@ void *server_job(void *args) {
 
   cursor.empty_mem = true;
   size_t completed_headers = 0; // I dont remember why I used this
-  printf("llegue\n");
   bool should_read = true;
   while (!should_read || ((n = read(get_client_fd(local_machine), read_buffer,
                                     BUFFER - 1)) > 0)) {
-    printf("=========\n%s=========\nnBytes: %li\n=========\n", read_buffer, n);
 
-    should_read = true;
+    if (should_read)
+      should_read = true;
     switch (get_state(local_machine)) {
 
     // Frist case:
@@ -249,28 +224,26 @@ void *server_job(void *args) {
       for (; url[j] != '\0' && url[j] != '?' && url[j] != ' '; j++) {
       }
       if (url[j] == '?') {
-        printf("DEBUG: URL has query parameters\n");
 
         char *param = url + j + 1;
         ssize_t idx = 0;
         for (; (idx = seek_separator(param)) != -1;) {
           char *p = param;
           p[idx] = '\0';
-          printf("DEBUG: adding param %s\n", p);
-          add_params(local_machine, p);
+          const char *to_add = strdup(p);
+          add_params(local_machine, to_add);
           param += idx + 1;
         }
         for (size_t i = 0; param[i] != '\0'; i++) {
           if (param[i] == ' ') {
-            printf("DEBUG: found space in param, terminating param string\n");
             idx = i;
             break;
           }
         }
         char *p = param;
         p[idx] = '\0';
-        printf("DEBUG: adding param out %s\n", p);
-        add_params(local_machine, p);
+        const char *to_add = strdup(p); // '\0'
+        add_params(local_machine, to_add);
       }
 
       // in order to have it when processing the request
@@ -355,22 +328,14 @@ void *server_job(void *args) {
               '\0') { // We are in the end of a header(previous if) and the
                       // cursor memory isnt empty so it has a header
 
-            printf("[+] Header=%s\n", cursor.memory);
             size_t i = 0;
             for (auto header = THIS_ROUTE.headers;
                  header && header->key != nullptr; i++, header++) {
-              printf("DEBUG: completed_headers: %lu\n", completed_headers);
-              printf("DEBUG: completed_headers & ((size_t)1 << i -> %lu & "
-                     "((size_t)1 << %lu = %lu \n",
-                     completed_headers, i,
-                     completed_headers & ((size_t)1 << i));
               if ((completed_headers & ((size_t)1 << i)) !=
                   0) { // As we iterate over the `server_routes_t` headers if we
                        // find the same header the request in invalid
 
                 continue;
-                printf("DEBUG: found duplicated header\n");
-                printf("[+] DEBUG Header %s failed\n", cursor.memory);
                 /* snprintf(send_buffer, BUFFER, */
                 /*          "HTTP/1.1 400 Bad Request\r\n\r\nBad headers"); */
                 /* write(get_client_fd(local_machine), send_buffer, */
@@ -383,7 +348,6 @@ void *server_job(void *args) {
               } // TODO: refactor
 
               bool good_header = true;
-              printf("DEBUG: Processing header definition: %s\n", header->key);
 
               bool should_add = true; // ifts not required then we dont add it
               if (header->validators != nullptr) {
@@ -419,29 +383,20 @@ void *server_job(void *args) {
                     should_add = false;
                     break;
                   }
-                  printf("DEBUG: good_header[j:%lu]=%d\n", j, good_header);
                 }
               } else {
-                printf("DEBUG: validators is nullptr!\n");
               }
 
               if (good_header) {
                 completed_headers |= ((size_t)1 << i);
-                printf("DEBUG: SETTING BIT AS MARKED\n");
                 if (should_add) {
-                  printf("DEBUG: ABOUT TO ADD HEADER: '%s'\n", cursor.memory);
 
                   char *temp = malloc(strlen(cursor.memory) + 1);
                   strcpy(temp, cursor.memory);
                   add_header(local_machine, temp);
-                  printf("DEBUG: HEADER ADDED. Headers count: %zu\n",
-                         local_machine->headers.len);
                 }
               } else {
-
-                printf("[+] DEBUG Header: %s failed\n", cursor.memory);
               }
-              printf("DEBUG: completed_headers: %lu\n", completed_headers);
             }
             if (get_state(local_machine) == ENDING)
               break;
@@ -480,12 +435,7 @@ void *server_job(void *args) {
         size_t k = 0;
         for (auto header = THIS_ROUTE.headers; header && header->key != nullptr;
              k++, header++) {
-          printf("DEBUG: validating all headers required were given\n");
           if ((completed_headers & ((size_t)1 << k)) != 1 && header->required) {
-            /* snprintf(send_buffer, BUFFER, */
-            /*          "HTTP/1.1 400 Bad Request\r\n\r\nBad headers"); */
-            /* write(get_client_fd(local_machine), send_buffer, */
-            /*       strlen(send_buffer)); // TODO: add error handling */
             bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                         "Bad headers");
             set_state(local_machine, ENDING);
@@ -496,35 +446,25 @@ void *server_job(void *args) {
         if (get_state(local_machine) == ENDING)
           break;
         if (n < BUFFER - 1 && (size_t)n == cursor.curr &&
-            get_http_method(get_route_index(local_machine)) <
-                HTTP_POST) { // GET || DELETE with body
-
-          /* snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n");
-           */
-          /* write(get_client_fd(local_machine), send_buffer, */
-          /*       strlen(send_buffer)); // TODO: add error handling */
-
+            get_http_method(get_route_index(local_machine)) < HTTP_POST) {
           bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
           set_state(local_machine, ENDING);
           should_read = false;
           break;
         }
         bzero(cursor.memory, BUFFER);
-        cursor.curr_mem = 0;
-        cursor.empty_mem = true;
-        cursor.offset = cursor.curr;
-        printf("headers terminados\n");
-        printf("DEBUG: cursor.offset = %zu\n", cursor.offset);
-        printf("DEBUG: cursor.curr = %zu\n", cursor.curr);
-        printf("DEBUG: cursor.curr_mem = %zu\n", cursor.curr_mem);
-        printf("DEBUG: n = %li\n", n);
-        printf("DEBUG: primeros bytes del body: ");
-        for (int i = 0; i < 16; i++) {
-          printf("%02X ", (unsigned char)read_buffer[cursor.offset + i]);
-        }
-        printf("\n");
-
         set_state(local_machine, WORKING);
+        if (cursor.curr == 0 &&
+            (get_http_method(get_route_index(local_machine)) == HTTP_POST ||
+             get_http_method(get_route_index(local_machine)) == HTTP_PUT)) {
+          break;
+        } else {
+
+          cursor.curr_mem = 0;
+          cursor.empty_mem = true;
+          cursor.offset = cursor.curr;
+        }
+
       } else {
         should_read = true;
         break; // keep processing headers
@@ -533,6 +473,7 @@ void *server_job(void *args) {
     }
     case WORKING: {
 
+      assert(get_state(local_machine) == WORKING);
       api_jump_table(&cursor, local_machine, read_buffer);
       set_state(local_machine, ENDING);
       [[fallthrough]];

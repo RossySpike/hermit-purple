@@ -1,0 +1,22 @@
+PROJECT_NAME           = vips-cpp
+PROJECT_NUMBER         = @VIPS_MAJOR_VERSION@.@VIPS_MINOR_VERSION@
+PROJECT_BRIEF          = "libvips C++ binding"
+OUTPUT_DIRECTORY       = @DOXY_OUTPUT_DIRECTORY@
+QUIET                  = YES
+INPUT                  = @DOXY_INPUT_DIRECTORY@/README.md \
+                         @DOXY_INPUT_DIRECTORY@/VConnection.cpp \
+                         @DOXY_INPUT_DIRECTORY@/VError.cpp \
+                         @DOXY_INPUT_DIRECTORY@/VImage.cpp \
+                         @DOXY_INPUT_DIRECTORY@/VInterpolate.cpp \
+                         @DOXY_INPUT_DIRECTORY@/VRegion.cpp \
+                         @DOXY_INPUT_DIRECTORY@/vips-operators.cpp \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/VConnection8.h \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/VError8.h \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/VImage8.h \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/VInterpolate8.h \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/VRegion8.h \
+                         @DOXY_INPUT_DIRECTORY@/include/vips/vips8
+USE_MDFILE_AS_MAINPAGE = @DOXY_INPUT_DIRECTORY@/README.md
+GENERATE_LATEX         = NO
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
