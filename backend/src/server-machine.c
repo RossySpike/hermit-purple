@@ -1,9 +1,17 @@
 #include "../includes/server-machine.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 void server_machine_init(server_machine *machine) {
+  machine->state = WAITING;
+  machine->server_ctx = (server_ctx *)calloc(1, sizeof(server_ctx));
+  machine->server_ctx->cursor =
+      (stream_cursor *)calloc(1, sizeof(stream_cursor));
+  machine->server_ctx->endpoint_ctx = nullptr;
+  machine->server_ctx->free_endpoint_ctx = nullptr;
+  machine->server_ctx->should_read = true;
   list_new(&machine->headers);
   list_new(&machine->params);
 }
@@ -73,6 +81,7 @@ inline size_t get_route_index(const server_machine *machine) {
 }
 
 inline void set_state(server_machine *machine, server_states state) {
+  machine->prev_state = machine->state;
   machine->state = state;
 }
 inline void set_route_index(server_machine *machine, size_t route_index) {

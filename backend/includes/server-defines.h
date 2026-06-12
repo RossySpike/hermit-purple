@@ -27,6 +27,12 @@ enum http_methods_t {
   HTTP_PUT,
   HTTP_OPTIONS
 };
+typedef enum {
+  FINISHED,
+  NEED_READ_MORE_DATA,
+  NEED_WRITE_MORE_DATA,
+  SOMETHING_WENT_WRONG
+} endpoint_return;
 typedef enum CONTENT_TYPE { TEXT_PLAIN, CURSOR_BINARY_FORMAT } CONTENT_TYPE;
 extern const char *content_type_value;
 #endif // !#ifndef SERVER_DEFINES_H

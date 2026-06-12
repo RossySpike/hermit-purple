@@ -52,6 +52,15 @@ int list_pop(list_t *l, void (*callback)(void *)) {
   return 0;
 }
 
+void list_free_contents(list_t *l, void (*callback)(void *)) {
+  if (!l)
+    return;
+  for (size_t i = 0; i < l->len; i++) {
+    if (callback)
+      callback(l->array[i]);
+    l->array[i] = nullptr;
+  }
+}
 void list_free(list_t *l, void (*callback)(void *)) {
   for (size_t i = 0; i < l->len; i++) {
     if (callback)

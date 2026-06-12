@@ -34,5 +34,6 @@ int list_pop(list_t *l, void (*callback)(void *));
  * it set them nullptr)
  */
 void list_free(list_t *l, void (*callback)(void *));
+void list_free_contents(list_t *l, void (*callback)(void *));
 
 #endif // LIST_H

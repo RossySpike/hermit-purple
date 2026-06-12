@@ -2,6 +2,7 @@
 #define SERVER_MACHINE_H
 #include "../includes/list.h"
 #include "server-defines.h"
+#include "server.h"
 typedef enum server_states {
   WAITING,
   PROCESSING_REQUEST_LINE,
@@ -11,8 +12,10 @@ typedef enum server_states {
 } server_states;
 typedef struct server_machine {
   server_states state;
+  server_states prev_state;
   int client_fd;
   size_t route_idx;
+  server_ctx *server_ctx;
   list_t headers;
   list_t params;
 } server_machine;

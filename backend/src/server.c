@@ -5,17 +5,19 @@
 #include "../includes/http-sanitize.h" // for __http_sanitize_key_value_t struct, validator functions.
 #include "../includes/server-defines.h" // for  BUFFER, PORT, BACKLOG, macros; http_methods_t enum.
 #include "../includes/server-routes.h"
-#include <asm-generic/socket.h>
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h> // for open() function
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h> // for exit() function.
 #include <strings.h>
+#include <sys/socket.h>
 #include <sys/socket.h> // for socket() function.
 #include <sys/stat.h>   // for fstat() function
 #include <sys/types.h>  // for types.
+#include <unistd.h>
 ssize_t seek_separator(const char *params) {
   for (size_t i = 0; params[i] != '\0'; i++) {
     if (params[i] == '&') {
@@ -52,12 +54,20 @@ int init_sock_server(server *s) {
     close(s->server_fd);
     return -1;
   }
+  // epoll
+  int flags = fcntl(s->server_fd, F_GETFL, 0);
+
+  if (!flags) {
+    return -1;
+  }
+  if (fcntl(s->server_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    return -1;
+
   if (listen(s->server_fd, BACKLOG) < 0) {
     fperror;
     close(s->server_fd);
     return -1;
   }
-
   return 0;
 }
 // 3
@@ -73,11 +83,21 @@ int init_server(server *s) {
 int init_client(server *s) {
   s->client_fd =
       accept(s->server_fd, (struct sockaddr *)&s->addr.addr, &s->addr.len);
-  if (s->client_fd < 0) {
-    fperror;
-    close(s->server_fd);
+  if (s->client_fd == -1) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return 1;
+    } else {
+      return -1;
+    }
+  }
+  int flags = fcntl(s->client_fd, F_GETFL, 0);
+
+  if (!flags) {
     return -1;
   }
+  if (fcntl(s->client_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    return -1;
+
   return 0;
 }
 int destroy_server(server *s) {
@@ -149,8 +169,12 @@ ssize_t check_url(const char *url) {
   const server_routes_t *local_routes = get_routes();
 
   for (size_t i = 0; local_routes[i].uri_regex != nullptr; i++) {
+    printf("usr:\n%s\n======", url);
+    printf("patron %s  \n", local_routes[i].uri_regex);
     int res = check_regex_with_regex(url, &local_routes[i].compiled_uri_regex);
     if (res == 1) {
+      printf("hallada con patron %s ,local_routes[i]:%lu \n",
+             local_routes[i].uri_regex, i);
       return i; // TODO: change
     } else if (res == -1) {
       perror("FALLO EL PATRON");
@@ -163,26 +187,39 @@ ssize_t check_url(const char *url) {
 
 // TODO: Check
 
-void *server_job(void *args) {
+#warning "bro I cant be this lazy lolllll"
+#define read_buffer local_machine->server_ctx->read_buffer
+#define cursor (*local_machine->server_ctx->cursor)
+#define completed_headers local_machine->server_ctx->completed_headers
+#define should_read local_machine->server_ctx->should_read
+
+endpoint_return server_job(void *args) {
   server_machine *local_machine = (server_machine *)args;
 
+  if (get_state(local_machine) == WAITING)
+    set_state(local_machine, PROCESSING_REQUEST_LINE);
   char send_buffer[BUFFER] = {0};
-  char read_buffer[BUFFER] = {0};
-  set_state(local_machine, PROCESSING_REQUEST_LINE);
   ssize_t n = 0; // number of bytes read
   /* bool stop_headers = false; */
-  stream_cursor cursor = {
-      0}; // has an index to the current character of the stream and a buffer to
-          // store old values from the stream that need to be used
 
-  cursor.empty_mem = true;
-  size_t completed_headers = 0; // I dont remember why I used this
-  bool should_read = true;
-  while (!should_read || ((n = read(get_client_fd(local_machine), read_buffer,
-                                    BUFFER - 1)) > 0)) {
+  /* cursor.empty_mem = true;  // move to initializator */
+  /* size_t completed_headers = 0; // I dont remember why I used this */
+  /* bool should_read = true; */
+  printf("should_read: %d\n", should_read);
+  while (1) {
 
-    if (should_read)
+    if (should_read) {
+
       should_read = true;
+      n = read(get_client_fd(local_machine), read_buffer, BUFFER - 1);
+      if (n == -1) {
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+          return NEED_READ_MORE_DATA;
+        else
+          return SOMETHING_WENT_WRONG;
+      }
+    }
     switch (get_state(local_machine)) {
 
     // Frist case:
@@ -194,12 +231,10 @@ void *server_job(void *args) {
       char *url = read_buffer + i;
 
       if (route_index == -1) {
-        /* snprintf(send_buffer, BUFFER, "HTTP/1.1 404 Not Found\r\n\r\n"); */
-        /* write(get_client_fd(local_machine), send_buffer, */
-        /*       strlen(send_buffer)); // TODO: add error handling */
 
         not_found(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
         set_state(local_machine, ENDING);
+        printf("lo mando a ending %d\n", 222);
 
         should_read = false;
         break;
@@ -211,12 +246,10 @@ void *server_job(void *args) {
           result == 1) { // In order to proceed we need result should be 0 or 2
                          // because the first line of the request shouldn't be
                          // bigger than BUFFER
-        /* snprintf(send_buffer, BUFFER, "HTTP/1.1 400 Bad Request\r\n\r\n"); */
-        /* write(get_client_fd(local_machine), send_buffer, */
-        /*       strlen(send_buffer)); // TODO: add error handling */
 
         bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
         set_state(local_machine, ENDING);
+        printf("lo mando a ending %d\n", 237);
         should_read = false;
         break;
       }
@@ -281,18 +314,16 @@ void *server_job(void *args) {
         continue;
       int result = find_carriage(&cursor, read_buffer);
       if (result == -1) { // header too large
-        /* snprintf(send_buffer, BUFFER, */
-        /*          "HTTP/1.1 400 Bad Request\r\n\r\nHeader too large"); */
-        /* write(get_client_fd(local_machine), send_buffer, */
-        /*       strlen(send_buffer)); // TODO: add error handling */
         bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                     "Header too large");
         set_state(local_machine, ENDING);
+        printf("lo mando a ending %d\n", 305);
         should_read = false;
         break;
       }
       if (result == 2) {
         set_state(local_machine, ENDING); //
+        printf("lo mando a ending %d\n", 311);
         should_read = false;
         break;
       }
@@ -336,13 +367,10 @@ void *server_job(void *args) {
                        // find the same header the request in invalid
 
                 continue;
-                /* snprintf(send_buffer, BUFFER, */
-                /*          "HTTP/1.1 400 Bad Request\r\n\r\nBad headers"); */
-                /* write(get_client_fd(local_machine), send_buffer, */
-                /*       strlen(send_buffer)); // TODO: add error handling */
                 bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                             "Bad headers");
                 set_state(local_machine, ENDING);
+                printf("lo mando a ending %d\n", 358);
                 should_read = false;
                 break;
               } // TODO: refactor
@@ -439,6 +467,7 @@ void *server_job(void *args) {
             bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                         "Bad headers");
             set_state(local_machine, ENDING);
+            printf("lo mando a ending %d\n", 455);
             should_read = false;
             break;
           }
@@ -449,6 +478,8 @@ void *server_job(void *args) {
             get_http_method(get_route_index(local_machine)) < HTTP_POST) {
           bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
           set_state(local_machine, ENDING);
+
+          printf("lo mando a ending %d\n", 467);
           should_read = false;
           break;
         }
@@ -474,15 +505,34 @@ void *server_job(void *args) {
     case WORKING: {
 
       assert(get_state(local_machine) == WORKING);
-      api_jump_table(&cursor, local_machine, read_buffer);
-      set_state(local_machine, ENDING);
-      [[fallthrough]];
-    }
-    case ENDING: {
-      close(get_client_fd(local_machine));
+      endpoint_return ret = api_jump_table(&cursor, local_machine, read_buffer);
+      switch (ret) {
+      case SOMETHING_WENT_WRONG:
+      case FINISHED:
+
+        printf("lo mando a ending %d\n", 499);
+
+        break;
+
+      case NEED_READ_MORE_DATA:
+      case NEED_WRITE_MORE_DATA:
+        return ret;
+      default:
+        unreachable();
+      }
       set_state(local_machine, WAITING);
-      break;
+      printf("lo mando a ending %d\n", 510);
+      should_read = false;
+      printf("ret: %d\n", ret);
+      return ret;
     }
+    /* case ENDING: { */
+    /*   close(get_client_fd(local_machine)); */
+    /*   set_state(local_machine, WAITING); */
+    /*   printf("case ENDING\n"); */
+    /*   return FINISHED; */
+    /*   break; */
+    /* } */
     default:
       unreachable();
     }
@@ -493,5 +543,6 @@ void *server_job(void *args) {
     bzero(send_buffer, BUFFER);
   }
 
-  return nullptr;
+  printf("llego al final\n");
+  return FINISHED;
 }
