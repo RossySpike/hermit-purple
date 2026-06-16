@@ -15,6 +15,26 @@
 #include <sys/types.h>
 #include <unistd.h> // for close() function
 #include <vips/vips.h>
+typedef enum SUPPORTED_FILETYPE {
+  FT_UNKNOWN = -1, // err value
+  FT_PNG = 0,
+  FT_JPEG,
+  FT_HEIC
+} SUPPORTED_FILETYPE;
+const char *file_extension(SUPPORTED_FILETYPE ft) {
+  assert(ft != FT_UNKNOWN);
+  switch (ft) {
+
+  case FT_PNG:
+    return "png";
+  case FT_JPEG:
+    return "jpeg";
+  case FT_HEIC:
+    return "heic";
+  default:
+    return "unknown";
+  }
+}
 
 // This will be sent to the client when getting /api/image/cursor
 typedef struct [[gnu::packed]] img_metadata {
@@ -24,10 +44,13 @@ typedef struct [[gnu::packed]] img_metadata {
 } img_metadata; // 18 bytes (linux x86-64)
 struct post_api_image {
   int fd;
-  unsigned long long content_length_val;
+  unsigned long long content_length_val; // Valor original, NO modificar
+  unsigned long long bytes_received; // ← NUEVO: llevar cuenta de lo recibido
   ssize_t n;
   char *filename;
+  SUPPORTED_FILETYPE ft;
   unsigned long long my_idx;
+  bool headers_written; // ← NUEVO: para saber si ya escribiste headers
 };
 struct get_api_image_cursor {
   file *files;
@@ -38,17 +61,37 @@ struct get_api_image_cursor {
   unsigned long long *files_ids;
   bool headers_written;
   unsigned short idx_metadata_written;
+  off_t metadata_off;
   unsigned short idx_img_written;
+  off_t img_off;
 };
 int free_wrapper(void *ptr) {
   struct post_api_image *p = (struct post_api_image *)ptr;
-  free(p->filename);
+  if (p == nullptr)
+    return 0;
+
+  if (p->filename != nullptr) {
+    free(p->filename);
+    p->filename = nullptr;
+  }
+
+  if (p->fd > 0) {
+    close(p->fd);
+    p->fd = -1;
+  }
+
   free(p);
-  ptr = nullptr;
   return 0;
 }
 int free_get_api_image_cursor_ctx(void *p) {
   struct get_api_image_cursor *ctx = (struct get_api_image_cursor *)p;
+  for (unsigned short i = 0; ctx->files_ids[i] != 0; i++) {
+
+    if (ctx->files[i].fd > 0) {
+      close(ctx->files[i].fd);
+      ctx->files[i].fd = -1;
+    }
+  }
   free(ctx->files_ids);
   ctx->files_ids = nullptr;
   free(ctx->files);
@@ -56,6 +99,7 @@ int free_get_api_image_cursor_ctx(void *p) {
   free(ctx->metadata);
   ctx->metadata = nullptr;
   free(p);
+
   p = nullptr;
   return 0;
 }
@@ -100,12 +144,6 @@ endpoint_return api_jump_table(stream_cursor *cursor, server_machine *machine,
 }
 extern unsigned long long get_idx();
 extern unsigned long long get_next_idx();
-typedef enum SUPPORTED_FILETYPE {
-  FT_UNKNOWN = -1, // err value
-  FT_PNG = 0,
-  FT_JPEG,
-  FT_HEIC
-} SUPPORTED_FILETYPE;
 /*
  * assumes stream is big enough
  * */
@@ -144,74 +182,103 @@ SUPPORTED_FILETYPE validate_file_type(char *stream, size_t start) {
 
   return ft;
 }
-const char *file_extension(SUPPORTED_FILETYPE ft) {
-  assert(ft != FT_UNKNOWN);
-  switch (ft) {
 
-  case FT_PNG:
-    return "png";
-  case FT_JPEG:
-    return "jpeg";
-  case FT_HEIC:
-    return "heic";
-  default:
-    return "unknown";
+struct get_api_image {
+  file f;
+  off_t offset;
+};
+int free_get_api_image_ctx(void *void_ctx) {
+  struct get_api_image *ctx = (struct get_api_image *)void_ctx;
+  int close_res = 0;
+  if (ctx->f.fd > 0) {
+    close_res = close(ctx->f.fd);
   }
+  free(ctx);
+  void_ctx = nullptr;
+  return close_res;
 }
-
 endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
-  const char *param = get_param(machine, "variant");
-  assert(param != nullptr);
-  const char *img_id = get_param(machine, "id");
-  assert(img_id != nullptr);
-  file f = {0};
-  if (strcasecmp(param, "original") == 0) {
-    f = open_img_at(img_id, IMG_ORIGINAL_DIR);
-  } else if (strcasecmp(param, "thumbnail") == 0) {
-
-    f = open_img_at(img_id, IMG_THUMBNAIL_DIR);
-  } else if (strcasecmp(param, "compressed") == 0) {
-
-    f = open_img_at(img_id, IMG_CACHE_DIR);
-  } else {
-    bad_request(get_client_fd(machine), BUFFER, nullptr, "Unsupported variant");
-    set_state(machine, ENDING);
-    return FINISHED;
-  }
   char buffer[BUFFER] = {0};
-  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %lu\r\n%s\r\n\r\n",
-           "Server", HOST_NAME, "Content-Length", f.size, cors_headers);
-  assert(write(get_client_fd(machine), buffer, strlen(buffer)));
-  ssize_t sent = sendfile(get_client_fd(machine), f.fd, nullptr, f.size);
-  while (f.size - sent > 0) {
-    ssize_t count = f.size - sent;
-    ssize_t s = sendfile(get_client_fd(machine), f.fd, &sent, count);
+  if (machine->server_ctx->endpoint_ctx == nullptr) {
+    const char *param = get_param(machine, "variant");
+    assert(param != nullptr);
+    const char *img_id = get_param(machine, "id");
+    assert(img_id != nullptr);
+    file f = {0};
+    if (strcasecmp(param, "original") == 0) {
+      f = open_img_at(img_id, IMG_ORIGINAL_DIR);
+
+    } else if (strcasecmp(param, "thumbnail") == 0) {
+
+      f = open_img_at(img_id, IMG_THUMBNAIL_DIR);
+    } else if (strcasecmp(param, "compressed") == 0) {
+
+      f = open_img_at(img_id, IMG_CACHE_DIR);
+    } else {
+      bad_request(get_client_fd(machine), BUFFER, nullptr,
+                  "Unsupported variant");
+      return FINISHED;
+    }
+    size_t last_dot = 0;
+    for (size_t i = 0; f.name[i] != '\0'; i++) {
+      if (f.name[i] == '.')
+        last_dot = i;
+    }
+    snprintf(buffer, BUFFER,
+             "HTTP/1.1 200 OK\r\n%s: %s\r\n%s%s\r\n%s: %lu\r\n%s\r\n\r\n",
+             "Server", HOST_NAME, "Content-Type: image/", f.name + last_dot + 1,
+             "Content-Length", f.size, cors_headers);
+    assert(write(get_client_fd(machine), buffer, strlen(buffer)));
+    ssize_t sent = sendfile(get_client_fd(machine), f.fd, nullptr, f.size);
+    if (sent == 0) {
+      return SOMETHING_WENT_WRONG;
+    }
+    if (sent == (ssize_t)f.size) {
+      return FINISHED;
+    }
+    struct get_api_image *ctx = malloc(sizeof(struct get_api_image));
+    ctx->f = f;
+    ctx->offset = sent;
+    machine->server_ctx->free_endpoint_ctx = free_get_api_image_ctx;
+    machine->server_ctx->endpoint_ctx = ctx;
+    return NEED_WRITE_MORE_DATA;
+  }
+  struct get_api_image *ctx = machine->server_ctx->endpoint_ctx;
+  while (ctx->f.size - ctx->offset > 0) {
+    ssize_t count = ctx->f.size - ctx->offset;
+    ssize_t s =
+        sendfile(get_client_fd(machine), ctx->f.fd, &(ctx->offset), count);
+    if (s == 0) {
+      return SOMETHING_WENT_WRONG; // socket closed
+    }
     if (s < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        return NEED_WRITE_MORE_DATA;
+      return SOMETHING_WENT_WRONG;
       break;
     }
   }
-  if (f.fd > 0) {
-    close(f.fd);
-  }
+  /* if (f.fd > 0) { */
+  /*   close(f.fd); */
+  /* } */
 
   return FINISHED;
 }
-
-// Must have processed headers
 endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
                                char *read_buffer) {
-  assert(BUFFER > 12);
   server_machine *local_machine = machine;
-  endpoint_return ret_val = FINISHED;
-  int fd = -1;
-  VipsImage *in = nullptr;
-  if (local_machine->server_ctx->endpoint_ctx == nullptr) {
+  struct post_api_image *ctx =
+      (struct post_api_image *)machine->server_ctx->endpoint_ctx;
 
-    ssize_t n = 0;
+  if (ctx == nullptr) {
     char filename[BUFFER] = {0};
 
     const char *content_length = get_header(machine, "content-length:");
-    assert(content_length != nullptr);
+    if (content_length == nullptr) {
+      bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                  "Missing Content-Length header");
+      goto cleanup;
+    }
 
     size_t colon_pos = 0;
     while (content_length[colon_pos] != ':' &&
@@ -220,7 +287,8 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     }
 
     if (content_length[colon_pos] != ':') {
-      bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+      bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                  "Invalid Content-Length header");
       goto cleanup;
     }
 
@@ -232,16 +300,19 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
 
     unsigned long long content_length_val =
         strtoull(content_length + value_start, nullptr, 10);
-
-    SUPPORTED_FILETYPE ft = FT_UNKNOWN;
+    if (content_length_val == 0) {
+      bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                  "Content-Length cannot be 0");
+      goto cleanup;
+    }
 
     size_t body_offset = cursor->offset;
-    size_t bytes_en_buffer = BUFFER - 1 - body_offset;
+    size_t bytes_en_buffer = machine->server_ctx->n - body_offset;
 
-    ft = validate_file_type(read_buffer, body_offset);
+    SUPPORTED_FILETYPE ft = validate_file_type(read_buffer, body_offset);
     if (ft == FT_UNKNOWN) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
-                  "unsuported file type");
+                  "Unsupported file type");
       goto cleanup;
     }
 
@@ -254,102 +325,114 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
                             "254");
       goto cleanup;
     }
-    fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
+
+    int fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
     if (fd < 0) {
-      perror("[debug] error en open() de archivo original");
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "261");
       goto cleanup;
     }
-    struct post_api_image *ctx = malloc(sizeof(struct post_api_image));
-    machine->server_ctx->endpoint_ctx = (void *)ctx;
-    machine->server_ctx->free_endpoint_ctx = free_wrapper;
+
     ssize_t initial_w = write(fd, read_buffer + body_offset, bytes_en_buffer);
     if (initial_w < 0) {
-      perror("[DEBUG] Error escribiendo buffer inicial en disco");
+      close(fd);
       goto cleanup;
     }
-    content_length_val -= bytes_en_buffer;
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-        ->content_length_val = content_length_val;
-    printf("content_length_val: %llu\n", content_length_val);
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n = n;
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->filename =
-        strdup(filename);
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->my_idx =
-        my_idx;
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->fd = fd;
+
+    ctx = malloc(sizeof(struct post_api_image));
+    if (ctx == nullptr) {
+      internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                            "Out of memory");
+      close(fd);
+      goto cleanup;
+    }
+
+    ctx->fd = fd;
+    ctx->content_length_val = content_length_val;
+    ctx->bytes_received = bytes_en_buffer;
+    ctx->filename = strdup(filename);
+    ctx->my_idx = my_idx;
+    ctx->headers_written = false;
+    ctx->ft = ft;
+
+    machine->server_ctx->endpoint_ctx = (void *)ctx;
+    machine->server_ctx->free_endpoint_ctx = free_wrapper;
+
+    bzero(machine->server_ctx->read_buffer, BUFFER);
     bzero(read_buffer, BUFFER);
-    /* struct timeval tv; */
-    /* tv.tv_sec = 5; */
-    /* tv.tv_usec = 1000; */
-    /* setsockopt(get_client_fd(machine), SOL_SOCKET, SO_RCVTIMEO, (const char
-     * *)&tv, */
-    /*            sizeof(tv)); */
+
+    if (ctx->bytes_received >= ctx->content_length_val) {
+      goto process_image;
+    }
+
+    return NEED_READ_MORE_DATA;
   }
+
+  // --- entrypoint for events ---
   char recv_buffer[BUFFER] = {0};
 
-  while (((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-             ->content_length_val > 0) {
-    ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n =
-        recv(get_client_fd(machine), recv_buffer, BUFFER - 1, 0);
+  while (ctx->bytes_received < ctx->content_length_val) {
+    size_t remaining = ctx->content_length_val - ctx->bytes_received;
+    size_t to_read = (remaining < BUFFER) ? remaining : BUFFER; // NOTE: changed
 
-    if (((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n >
-        (ssize_t)((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-            ->content_length_val) {
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n =
-          ((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-              ->content_length_val;
-    }
-    if (((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n > 0) {
-      ssize_t loop_w = write(
-          ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->fd,
-          recv_buffer,
-          ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n);
+    ctx->n = recv(get_client_fd(machine), recv_buffer, to_read, 0);
+    if (ctx->n > 0) {
+      ssize_t loop_w = write(ctx->fd, recv_buffer, ctx->n);
       if (loop_w < 0) {
+        return SOMETHING_WENT_WRONG;
+      }
+      ctx->bytes_received += ctx->n;
+      bzero(recv_buffer, BUFFER);
+
+      if (ctx->bytes_received >= ctx->content_length_val) {
         break;
       }
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-          ->content_length_val -=
-          ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n;
-      bzero(recv_buffer, BUFFER);
-    } else if (((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-                   ->n == 0) {
+    } else if (ctx->n == 0) {
+      if (ctx->bytes_received >= ctx->content_length_val) {
+        break;
+      }
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
-                            "317");
-      break;
-    }
-    if (((struct post_api_image *)machine->server_ctx->endpoint_ctx)->n == -1) {
-
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
+                            "Connection closed before complete data");
+      return SOMETHING_WENT_WRONG;
+    } else { // ctx->n == -1
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (ctx->bytes_received >= ctx->content_length_val) {
+          break;
+        }
         return NEED_READ_MORE_DATA;
-      else
-        return SOMETHING_WENT_WRONG;
+      }
+      return SOMETHING_WENT_WRONG;
     }
   }
 
-  if (((struct post_api_image *)machine->server_ctx->endpoint_ctx)
-          ->content_length_val != 0) {
+process_image:
+  if (ctx->bytes_received != ctx->content_length_val) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "331");
     goto cleanup;
   }
 
-  if (lseek(((struct post_api_image *)machine->server_ctx->endpoint_ctx)->fd, 0,
-            SEEK_SET) == (off_t)-1) {
+  if (lseek(ctx->fd, 0, SEEK_SET) == (off_t)-1) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "338");
     goto cleanup;
   }
 
-  // IMG TRANSFORMATION
-  VipsSource *source = nullptr;
-  source = vips_source_new_from_descriptor(
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->fd);
+  VipsImage *in = nullptr;
+  VipsSource *source = vips_source_new_from_descriptor(ctx->fd);
   if (!source) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "348");
     goto cleanup;
   }
+  if (fsync(ctx->fd) == -1) {
+    // I may need to do something here.
+  }
 
-  in = vips_image_new_from_source(source, "", NULL);
+  if (ctx->ft == FT_HEIC) {
+
+    int result = vips_heifload_source(source, &in, "unlimited", TRUE, NULL);
+  } else {
+
+    in = vips_image_new_from_source(source, "", NULL);
+  }
   g_object_unref(source);
   source = nullptr;
 
@@ -360,28 +443,25 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
 
   void *buffer_salida = NULL;
   size_t tam_salida = 0;
-  int resultado_save = -1;
+  int resultado_save =
+      vips_webpsave_buffer(in, &buffer_salida, &tam_salida, NULL);
 
-  resultado_save = vips_webpsave_buffer(in, &buffer_salida, &tam_salida, NULL);
-
-  int filename_res = snprintf(
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->filename,
-      BUFFER, "%s%llu.%s", IMG_THUMBNAIL_DIR,
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->my_idx,
-      "webp");
+  char thumbnail_path[BUFFER] = {0};
+  int filename_res = snprintf(thumbnail_path, BUFFER, "%s%llu.%s",
+                              IMG_THUMBNAIL_DIR, ctx->my_idx, "webp");
   if (filename_res < 0 || filename_res >= BUFFER) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "375");
+    g_free(buffer_salida);
     goto cleanup;
   }
 
   if (resultado_save != 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "381");
+    g_free(buffer_salida);
     goto cleanup;
   }
 
-  int fd_salida = open(
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->filename,
-      O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int fd_salida = open(thumbnail_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd_salida < 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "390");
     g_free(buffer_salida);
@@ -398,32 +478,27 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   close(fd_salida);
   g_free(buffer_salida);
 
-  // --- JPEG ---
-  buffer_salida = nullptr;
+  buffer_salida = NULL;
   tam_salida = 0;
-  resultado_save = -1;
-
   resultado_save = vips_jpegsave_buffer(in, &buffer_salida, &tam_salida, NULL);
 
-  filename_res = snprintf(
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->filename,
-      BUFFER, "%s%llu.%s", IMG_CACHE_DIR,
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->my_idx,
-      "jpeg");
+  char cache_path[BUFFER] = {0};
+  filename_res = snprintf(cache_path, BUFFER, "%s%llu.%s", IMG_CACHE_DIR,
+                          ctx->my_idx, "jpeg");
 
   if (filename_res < 0 || filename_res >= BUFFER) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "421");
+    g_free(buffer_salida);
     goto cleanup;
   }
 
   if (resultado_save != 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "427");
+    g_free(buffer_salida);
     goto cleanup;
   }
 
-  fd_salida = open(
-      ((struct post_api_image *)machine->server_ctx->endpoint_ctx)->filename,
-      O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  fd_salida = open(cache_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd_salida < 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "436");
     g_free(buffer_salida);
@@ -443,27 +518,16 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   g_object_unref(in);
   in = nullptr;
 
-  if (fd >= 0) {
-    close(fd);
-    fd = -1;
-  }
-
   created(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+
 cleanup:
-  if (in) {
-    g_object_unref(in);
-  }
-  if (fd >= 0) {
-    close(fd);
-  }
-  return ret_val;
+  return FINISHED;
 }
 endpoint_return get_api_image_cursor(server_machine *machine) {
-
   if (machine->server_ctx->endpoint_ctx == nullptr) {
     const char *current = get_param(machine, "current");
     assert(current != nullptr);
-    unsigned long long curr = strtoul(current, nullptr, 10);
+    unsigned long long curr = strtoull(current, nullptr, 10);
     if (curr == 0) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid current parameter");
@@ -471,8 +535,10 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     }
     const char *limit = get_param(machine, "limit");
     assert(limit != nullptr);
-    const unsigned short lim = strtoul(limit, nullptr, 10);
-    if (limit == 0 || curr < (unsigned long long)(lim + 1)) {
+    unsigned long long lim_tmp = strtoull(limit, nullptr, 10);
+    unsigned short lim = (unsigned short)lim_tmp;
+
+    if (lim == 0 || curr < (unsigned long long)(lim + 1)) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid limit parameter");
       return FINISHED;
@@ -484,22 +550,57 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     }
 
     file *files = malloc(sizeof(file) * lim);
-    unsigned long long *files_ids = open_files_to_arr(
-        IMG_THUMBNAIL_DIR, files, (unsigned short *const)&lim, curr);
-    assert(files_ids != nullptr);
-    img_metadata *metadata = malloc(sizeof(img_metadata) * lim);
+    if (!files) {
+      internal_server_error(get_client_fd(machine), BUFFER, nullptr,
+                            "Memory allocation failed");
+      return FINISHED;
+    }
+
+    unsigned short actual_lim = lim;
+    unsigned long long *files_ids =
+        open_files_to_arr(IMG_THUMBNAIL_DIR, files, &actual_lim, curr);
+
+    if (files_ids == nullptr || actual_lim == 0) {
+      free(files);
+      char buffer[BUFFER] = {0};
+      snprintf(buffer, BUFFER,
+               "HTTP/1.1 200 OK\r\n"
+               "Server: %s\r\n"
+               "Content-Type: application/octet-stream\r\n"
+               "Content-Length: 0\r\n"
+               "%s\r\n\r\n",
+               HOST_NAME, cors_headers);
+      write(get_client_fd(machine), buffer, strlen(buffer));
+      return FINISHED;
+    }
+
+    img_metadata *metadata = malloc(sizeof(img_metadata) * actual_lim);
+    if (!metadata) {
+      free(files_ids);
+      free(files);
+      internal_server_error(get_client_fd(machine), BUFFER, nullptr,
+                            "Memory allocation failed");
+      return FINISHED;
+    }
+
     unsigned long long total_size = 0;
-    for (unsigned short i = 0; i < lim && files_ids[i] != 0; i++) {
+    for (unsigned short i = 0; i < actual_lim; i++) {
       total_size += files[i].size;
     }
-    total_size += sizeof(img_metadata) * lim;
+    total_size += sizeof(img_metadata) * actual_lim;
+
     struct get_api_image_cursor *ctx =
         calloc(1, sizeof(struct get_api_image_cursor));
     ctx->files = files;
     ctx->metadata = metadata;
     ctx->total_size = total_size;
-    ctx->lim = lim;
+    ctx->lim = actual_lim;
     ctx->files_ids = files_ids;
+    ctx->headers_written = false;
+    ctx->idx_metadata_written = 0;
+    ctx->idx_img_written = 0;
+    ctx->metadata_off = 0;
+    ctx->img_off = 0;
 
     machine->server_ctx->endpoint_ctx = (void *)ctx;
     machine->server_ctx->free_endpoint_ctx = free_get_api_image_cursor_ctx;
@@ -507,66 +608,83 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
 
   struct get_api_image_cursor *ctx =
       (struct get_api_image_cursor *)machine->server_ctx->endpoint_ctx;
+
   if (!ctx->headers_written) {
-
     char buffer[BUFFER] = {0};
-    snprintf(buffer, BUFFER,
-             "HTTP/1.1 200 OK\r\n%s: %s\r\n%s: %llu\r\n%s\r\n\r\n", "Server",
-             HOST_NAME, "Content-Length", ctx->total_size, cors_headers);
-    ssize_t s = write(get_client_fd(machine), buffer, strlen(buffer));
-    if (s < 0) {
+    size_t header_len = snprintf(buffer, BUFFER,
+                                 "HTTP/1.1 200 OK\r\n"
+                                 "Server: %s\r\n"
+                                 "Content-Type: application/octet-stream\r\n"
+                                 "Content-Length: %llu\r\n"
+                                 "Connection: close\r\n"
+                                 "%s\r\n\r\n",
+                                 HOST_NAME, ctx->total_size, cors_headers);
 
-      if (errno == EAGAIN || errno == EWOULDBLOCK)
-        return NEED_WRITE_MORE_DATA;
-      else
+    size_t sent = 0;
+    while (sent < header_len) {
+      ssize_t s =
+          write(get_client_fd(machine), buffer + sent, header_len - sent);
+      if (s < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+          return NEED_WRITE_MORE_DATA;
         return SOMETHING_WENT_WRONG;
+      }
+      if (s == 0) {
+        return SOMETHING_WENT_WRONG;
+      }
+      sent += s;
     }
     ctx->headers_written = true;
   }
-  for (unsigned short i = ctx->idx_metadata_written > ctx->idx_img_written
-                              ? ctx->idx_img_written
-                              : ctx->idx_metadata_written;
-       i < ctx->lim && ctx->files_ids[i] != 0; i++) {
 
-    ctx->metadata[i] = (img_metadata){
-        .idx = i, .img_id = ctx->files_ids[i], .img_size = ctx->files[i].size};
-    if (ctx->idx_metadata_written == ctx->idx_img_written) {
+  for (unsigned short i = ctx->idx_img_written; i < ctx->lim; i++) {
 
-      ssize_t s = write(get_client_fd(machine), &ctx->metadata[i],
-                        sizeof(img_metadata));
+    if (ctx->idx_metadata_written == i) {
+      ctx->metadata[i] = (img_metadata){.idx = i,
+                                        .img_id = ctx->files_ids[i],
+                                        .img_size = ctx->files[i].size};
 
-      if (s < 0) {
+      size_t total = sizeof(img_metadata);
+      char *ptr = (char *)&ctx->metadata[i];
 
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-          return NEED_WRITE_MORE_DATA;
-        else
+      while (ctx->metadata_off < (off_t)total) {
+        ssize_t s = write(get_client_fd(machine), ptr + ctx->metadata_off,
+                          total - ctx->metadata_off);
+        if (s < 0) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return NEED_WRITE_MORE_DATA;
           return SOMETHING_WENT_WRONG;
+        }
+        if (s == 0) {
+          return SOMETHING_WENT_WRONG;
+        }
+        ctx->metadata_off += s;
       }
       ctx->idx_metadata_written++;
+      ctx->metadata_off = 0; // Reset for next metadata
     }
-    if (ctx->idx_metadata_written > ctx->idx_img_written) {
 
-      ssize_t s = sendfile(get_client_fd(machine), ctx->files[i].fd, nullptr,
-                           ctx->files[i].size);
+    // Send file data
+    while (ctx->img_off < (off_t)ctx->files[i].size) {
+      size_t remaining = ctx->files[i].size - ctx->img_off;
+      ssize_t s = sendfile(get_client_fd(machine), ctx->files[i].fd,
+                           &ctx->img_off, remaining);
+
       if (s < 0) {
-
         if (errno == EAGAIN || errno == EWOULDBLOCK)
           return NEED_WRITE_MORE_DATA;
-        else
-          return SOMETHING_WENT_WRONG;
+        return SOMETHING_WENT_WRONG;
+      }
+      if (s == 0) {
+        break; // EOF
       }
     }
-    if (ctx->files[i].fd > 0) {
-      close(ctx->files[i].fd);
-    }
+
+    // next file
+    ctx->idx_img_written++;
+    ctx->img_off = 0; // Reset offset for next file
   }
 
-  /* free(files_ids); */
-  /* files_ids = nullptr; */
-  /* free(files); */
-  /* files = nullptr; */
-  /* free(metadata); */
-  /* metadata = nullptr; */
   return FINISHED;
 }
 endpoint_return options_api_image_cursor(server_machine *machine) {

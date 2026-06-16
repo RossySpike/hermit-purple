@@ -1,0 +1,28 @@
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+./src/api-image.c: En la función ‘get_api_image’:
+./src/api-image.c:236:14: warning: comparison of integer expressions of different signedness: ‘ssize_t’ {también conocido como ‘long int’} and ‘size_t’ {también conocido co
+mo ‘long unsigned int’} [-Wsign-compare]
+  236 |     if (sent == f.size) {
+      |              ^~
+./src/api-image.c: En la función ‘post_api_image’:
+./src/api-image.c:443:9: warning: variable ‘result’ sin usar [-Wunused-variable]
+  443 |     int result = vips_heifload_source(source, &in, "unlimited", TRUE, NULL);
+      |         ^~~~~~
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+./src/server.c:186:2: warning: #warning "bro I cant be this lazy lolllll" [-Wcpp]
+  186 | #warning "bro I cant be this lazy lolllll"
+      |  ^~~~~~~
+cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
+main.c: En la función ‘main’:
+main.c:133:26: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
+  133 |     for (size_t i = 0; i < n_events; i++) {
+      |                          ^
+

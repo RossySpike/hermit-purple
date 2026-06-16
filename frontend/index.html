@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hermit Purple</title>
+    <link rel="stylesheet" href="/styles/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>HERMIT PURPLE</h1>
+      <button id="uploadBtn">➕ Upload</button>
+      <input
+        type="file"
+        id="fileInput"
+        accept="image/*"
+        style="display: none"
+      />
+    </header>
+
+    <main id="gallery">
+      <section id="loaderContainer"></section>
+      <button id="loadMoreBtn" onclick="loadMultipleBatches()"></button>
+    </main>
+
+    <dialog id="imageModal" class="modal">
+      <main class="modal-content">
+        <img id="modalImage" class="modal-img" alt="Vista previa" />
+        <span id="modalMessage" class="message"></span>
+        <div class="modal-buttons">
+          <button id="downloadOriginalBtn" onclick="downloadOriginalImage()">
+            ⬇️ Download original
+          </button>
+          <button id="closeModalBtn" onclick="closeModal()" class="close-modal">
+            Close
+          </button>
+        </div>
+      </main>
+    </dialog>
+
+    <footer></footer>
+
+    <script src="./scripts/index.js"></script>
+  </body>
+</html>

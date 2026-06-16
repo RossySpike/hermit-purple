@@ -56,7 +56,7 @@ unsigned long long get_biggest_index(const char *path) {
   assert(dir);
 
   while ((entry = readdir(dir))) {
-    // omit "." y ".."
+    // omit "." and ".."
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
       continue;
     size_t i = 0;
@@ -94,6 +94,7 @@ file open_img_at(const char *id, const char *path) {
       char b[BUFFER] = {0};
       snprintf(b, sizeof(b), "%s%s", path, entry->d_name);
       open_file(&f, b, O_RDONLY);
+      f.name = entry->d_name;
 
       break;
     }

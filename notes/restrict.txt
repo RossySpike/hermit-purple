@@ -1,0 +1,174 @@
+`restrict` es una palabra clave en C (introducida en C99) que le permite al programador **prometerle al compilador** que dos punteros no apuntan a regiones de memoria superpuestas. Esto permite al compilador generar código más optimizado.
+
+## 🎯 Concepto Fundamental
+
+Cuando usas `restrict`, le dices al compilador:
+> "Confía en mí: este puntero es la **única forma** de acceder a la memoria a la que apunta durante la vida de este puntero."
+
+El compilador puede entonces hacer optimizaciones agresivas que de otra forma serían peligrosas.
+
+## 📝 Sintaxis Básica
+
+```c
+void funcion(int *restrict ptr1, int *restrict ptr2) {
+    // ptr1 y ptr2 no se superponen
+    *ptr1 = 5;
+    *ptr2 = 10;
+    *ptr1 = *ptr2 + 1;  // El compilador sabe que ptr1 y ptr2 son distintos
+}
+```
+
+## 🔍 Ejemplo Práctico: Sin vs Con `restrict`
+
+### **Sin `restrict`** (Código conservador)
+```c
+void suma_arrays(int *a, int *b, int *c, int n) {
+    for (int i = 0; i < n; i++) {
+        c[i] = a[i] + b[i];
+    }
+}
+```
+El compilador **debe asumir** que `a`, `b`, y `c` podrían superponerse (ej: `a` y `c` podrían ser el mismo array). Esto impide muchas optimizaciones.
+
+### **Con `restrict`** (Código optimizable)
+```c
+void suma_arrays(int *restrict a, int *restrict b, int *restrict c, int n) {
+    for (int i = 0; i < n; i++) {
+        c[i] = a[i] + b[i];
+    }
+}
+```
+Ahora el compilador **sabe** que no hay superposición y puede:
+- Vectorizar el bucle (usar SIMD)
+- Reordenar operaciones
+- Usar registros más agresivamente
+
+## ⚡ Caso Clásico: `memcpy` vs `memmove`
+
+```c
+// memcpy - asume que no hay superposición (usa restrict)
+void *memcpy(void *restrict dest, const void *restrict src, size_t n);
+
+// memmove - permite superposición (no usa restrict)
+void *memmove(void *dest, const void *src, size_t n);
+```
+
+**Por qué**: `memcpy` puede ser más rápida porque asume regiones separadas, mientras que `memmove` debe manejar el caso general.
+
+## 🧪 Ejemplo Visual de Superposición
+
+```c
+int arr[10] = {0,1,2,3,4,5,6,7,8,9};
+
+// ❌ PELIGROSO: Violación de restrict
+int *restrict p1 = &arr[0];
+int *restrict p2 = &arr[2];  // ¡Se superponen!
+
+// Usar p1 y p2 juntos es comportamiento indefinido
+*p1 = 10;
+*p2 = 20;  // UB: p2 accede a memoria que p1 "posee"
+
+// ✅ Correcto: Sin superposición
+int a[100];
+int b[100];
+int *restrict pa = a;
+int *restrict pb = b;  // OK: a y b son arrays distintos
+```
+
+## 🎯 Dónde Usar `restrict`
+
+### **1. Parámetros de función (más común)**
+```c
+void procesar_matriz(float *restrict salida, 
+                     const float *restrict entrada, 
+                     int n) {
+    for (int i = 0; i < n; i++) {
+        salida[i] = entrada[i] * 2.0f;
+    }
+}
+```
+
+### **2. En definiciones de variables**
+```c
+int *restrict ptr = malloc(100 * sizeof(int));
+// ptr es la única referencia a esta memoria
+```
+
+### **3. En estructuras (desde C23)**
+```c
+struct buffer {
+    char *restrict data;  // C23 permite restrict en miembros
+    size_t size;
+};
+```
+
+## 🔬 Optimización Generada: Ejemplo Real
+
+```c
+// Código fuente
+int sumar_productos(int *restrict a, int *restrict b, int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        total += a[i] * b[i];
+    }
+    return total;
+}
+```
+
+**Sin `restrict`**: El compilador debe recargar valores por si `a` y `b` se superponen.
+**Con `restrict`**: Puede cargar valores en registros y usar SIMD (ej: instrucciones AVX).
+
+## ⚠️ Advertencias Importantes
+
+| Regla | Explicación |
+|-------|-------------|
+| **Es una promesa, no una comprobación** | El compilador **no verifica** que cumplas la promesa. Violarla = comportamiento indefinido |
+| **Solo para punteros** | No se aplica a valores escalares |
+| **Alcance limitado** | La promesa aplica solo dentro del ámbito donde el puntero `restrict` existe |
+| **No es C++ estándar** | C++ tiene `__restrict` como extensión, pero no es estándar hasta C++23 (y diferente) |
+
+## 🛠️ En Tu Servidor HTTP
+
+Basado en tu código, podrías usar `restrict` en:
+
+```c
+// Procesamiento de buffers
+void sanitize_headers(char *restrict output, 
+                      const char *restrict input, 
+                      size_t n) {
+    // output e input no se superponen
+    for (size_t i = 0; i < n; i++) {
+        if (input[i] == '\r' || input[i] == '\n') {
+            output[i] = ' ';
+        } else {
+            output[i] = input[i];
+        }
+    }
+}
+
+// Parseo de URL
+void parse_url(const char *restrict url, 
+               char *restrict path, 
+               char *restrict query) {
+    // url, path, query son todos distintos
+}
+```
+
+## 📊 Impacto en Rendimiento
+
+| Situación | Beneficio de `restrict` |
+|-----------|------------------------|
+| Arrays grandes procesados en bucle | **Alto** (2-10x más rápido) |
+| Funciones matemáticas (BLAS, FFT) | **Muy alto** (10-100x con SIMD) |
+| Strings cortos o punteros únicos | **Bajo** (casi ninguna mejora) |
+| Código con superposición potencial | **Negativo** (UB si se usa mal) |
+
+## 💡 Resumen
+
+**`restrict` es una herramienta de optimización**: 
+- ✅ **Úsalo** cuando sepas que dos punteros nunca se superponen
+- ✅ **Úsalo** en funciones de procesamiento numérico intensivo
+- ❌ **No lo uses** si los punteros podrían alias (apuntar a la misma memoria)
+- ❌ **No lo uses** en interfaces públicas si no controlas cómo se usan
+
+**Regla de oro**: Si no estás 100% seguro de que no hay superposición, **no uses `restrict`**. La optimización no vale la pena si introduce bugs sutiles.

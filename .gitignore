@@ -1,0 +1,5 @@
+./**/**/vgcore.*
+./**/**/*.out
+./backend/src/mkdir.c
+./notes
+./vips-8.18.3.tar.xz

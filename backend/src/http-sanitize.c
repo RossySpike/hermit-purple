@@ -23,7 +23,6 @@ int check_regex(const char *haystack, const char *pattern) {
     regfree(&regex);
     return found;
   } else {
-    perror("FALLO EL PATRON");
     return -1;
   }
 }

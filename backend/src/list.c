@@ -5,7 +5,8 @@
 void list_new(list_t *new_list) {
   new_list->capacity = 1;
   new_list->len = 0;
-  new_list->array = malloc(sizeof(void *));
+  new_list->array = calloc(1, sizeof(void *));
+  assert(new_list->array != nullptr);
 }
 
 void list_grow(list_t *l) {
@@ -53,13 +54,16 @@ int list_pop(list_t *l, void (*callback)(void *)) {
 }
 
 void list_free_contents(list_t *l, void (*callback)(void *)) {
-  if (!l)
+  if (!l || !l->array || l->len == 0)
     return;
+
   for (size_t i = 0; i < l->len; i++) {
-    if (callback)
+    if (callback && l->array[i]) {
       callback(l->array[i]);
+    }
     l->array[i] = nullptr;
   }
+  l->len = 0;
 }
 void list_free(list_t *l, void (*callback)(void *)) {
   for (size_t i = 0; i < l->len; i++) {

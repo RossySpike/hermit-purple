@@ -1,0 +1,95 @@
+¡Excelente pregunta! Después de enfocarte en la corrección con los sanitizers, el siguiente paso natural es asegurarte de que tu servidor HTTP no solo sea correcto, sino también rápido. Aquí te explico cómo hacerlo.
+
+Te propongo una estrategia en tres niveles, que van desde la visión general del sistema hasta el detalle de cada función en tu código.
+
+### 📊 Estrategia de Análisis de Rendimiento
+
+Puedes verlo como un viaje desde las afueras de la ciudad hasta el interior de una casa: primero observas el tráfico general, luego entras en una calle específica y finalmente analizas qué habitación consume más energía.
+
+| Nivel | Objetivo | Herramienta Clave | Qué Mide |
+| :--- | :--- | :--- | :--- |
+| **1. Visión General** | Identificar cuellos de botella macros (CPU, memoria, E/S) | `perf stat` | Instrucciones por ciclo, tasa de fallos de caché, uso de RAM  |
+| **2. Análisis de Funciones** | Encontrar las funciones "calientes" que consumen más CPU | `gprof`, `perf record` | Tiempo total de ejecución, número de llamadas por función  |
+| **3. Análisis Detallado** | Optimizar el código a nivel de instrucciones | `valgrind --tool=callgrind` | Líneas de código costosas, jerarquía de llamadas  |
+
+---
+
+### 🛠️ Guía Paso a Paso para tu Servidor
+
+#### 1. Compilación para Análisis
+
+El primer paso es compilar tu servidor con la información y las optimizaciones adecuadas. Te recomiendo usar dos versiones:
+
+*   **Para análisis con `gprof`**: Añade el flag `-pg`. Esto inserta código para recolectar datos de rendimiento.
+    ```bash
+    gcc -pg -O2 -o servidor main.c
+    ```
+*   **Para análisis general con `perf` y `valgrind`**: Solo necesitas los símbolos de depuración (`-g`) y un nivel de optimización realista, como `-O2`. No uses `-pg` con `perf` para evitar interferencias.
+    ```bash
+    gcc -g -O2 -o servidor main.c
+    ```
+
+#### 2. Obtener una Visión General Rápida (Nivel 1)
+
+Antes de profundizar, ejecuta `perf stat` para obtener una foto del rendimiento de tu servidor mientras maneja unas cuantas peticiones.
+
+```bash
+perf stat ./servidor
+```
+
+Presta atención a métricas clave como:
+*   **`instructions` vs `cycles`**: La relación `instructions per cycle (IPC)` te dice la eficiencia de tu CPU. Un valor bajo puede indicar ineficiencias.
+*   **`cache-misses`**: Un número alto de fallos de caché puede ralentizar mucho tu servidor .
+
+#### 3. Encontrar las Funciones "Calientes" (Nivel 2)
+
+Esta es la parte más importante. Quieres saber qué funciones de tu código se están llevando la mayor parte del tiempo de CPU.
+
+**Opción A: `gprof` (Simple y Directo)**
+Ideal para un primer vistazo rápido. Al ejecutar tu servidor compilado con `-pg`, se generará un archivo `gmon.out`. Luego, ejecuta:
+
+```bash
+gprof ./servidor gmon.out > analisis_perfil.txt
+```
+
+En el archivo `analisis_perfil.txt`, busca la sección `Flat profile`. Ahí verás una lista de tus funciones ordenadas por el tiempo que consumen. La función en la cima es tu principal candidata para optimizar .
+
+**Opción B: `perf record` (Más Moderno y Robusto)**
+Esta herramienta es increíblemente potente y tiene menos sobrecarga que `gprof`.
+
+1.  **Graba los datos mientras tu servidor está activo** (por ejemplo, mientras recibe peticiones):
+    ```bash
+    sudo perf record -g ./servidor
+    ```
+    El flag `-g` es crucial, ya que captura la jerarquía de llamadas (quién llama a quién).
+2.  **Analiza el resultado**:
+    ```bash
+    sudo perf report
+    ```
+    Esto abrirá una interfaz interactiva. Puedes navegar para ver qué funciones consumen más CPU y expandir sus "call graphs" para ver desde dónde son llamadas .
+
+#### 4. Análisis de Alto Detalle (Nivel 3) - *Opcional pero Poderoso*
+
+Si después de optimizar las funciones principales aún necesitas más rendimiento, `valgrind` con su herramienta `callgrind` te permite bajar al nivel de línea de código.
+
+```bash
+valgrind --tool=callgrind ./servidor
+```
+
+Esto generará un archivo `callgrind.out.<PID>`. Para entenderlo fácilmente, usa **KCachegrind** (un visualizador). Si no lo tienes, instálalo (`sudo apt install kcachegrind` en Debian/Ubuntu) y ábrelo:
+
+```bash
+kcachegrind callgrind.out.<PID>
+```
+
+La interfaz gráfica te mostrará un mapa de árbol (call graph) donde el tamaño de los rectángulos representa el costo de cada función. Puedes hacer clic para profundizar hasta ver la línea de código exacta que es costosa .
+
+### 💡 Consejos Clave para una Buena Medición
+
+*   **Estabiliza el Entorno**: Para que las pruebas sean consistentes, intenta cerrar otros programas y fija la CPU si es posible. Puedes usar `taskset -c 0 ./servidor` para forzar que tu servidor se ejecute siempre en el mismo núcleo de CPU .
+*   **Genera Tráfico Realista**: No basta con ejecutar el servidor y que esté idle. Usa herramientas como `ab` (Apache Benchmark) o `wrk` para lanzar muchas peticiones HTTP mientras haces la medición. Ese es el escenario real donde aparecerán los cuellos de botella.
+*   **Optimiza de Forma Iterativa**: Es un ciclo: 1) Mide, 2) Encuentra el cuello de botella, 3) Optimiza el código, 4) Vuelve a medir para confirmar la mejora .
+
+En resumen, para tu proyecto, te sugiero empezar con **`perf stat`** para una visión general y luego usar **`perf report`** para identificar las funciones más costosas. Si necesitas más detalle, `valgrind --tool=callgrind` es tu mejor aliado.
+
+Espero que esta guía te sea de gran ayuda. Si al analizar los resultados te encuentras con algún cuello de botella concreto o una función que no sabes cómo optimizar, ¡no dudes en compartirlo!

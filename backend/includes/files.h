@@ -6,6 +6,7 @@
 typedef struct F {
   int fd;
   size_t size;
+  char * name;
 } file;
 int open_file(file *f, const char *r_path, int flag);
 int close_file(file *f);
