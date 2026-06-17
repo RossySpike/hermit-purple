@@ -3,6 +3,7 @@
 #include "./includes/server-machine.h"
 #include "./includes/server-routes.h"
 #include "./includes/server.h"
+#include "includes/list.h"
 #include <assert.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -56,6 +57,9 @@ void server_machine_reset(server_machine *machine) {
       bzero(machine->server_ctx->cursor->memory, BUFFER);
     }
 
+    /* printf("machine->server_ctx: %p        \n", machine->server_ctx); */
+    /* printf("machine->server_ctx->free_endpoint_ctx: %p        \n", */
+    /*        (void *)machine->server_ctx->free_endpoint_ctx); */
     if (machine->server_ctx->endpoint_ctx &&
         machine->server_ctx->free_endpoint_ctx) {
       machine->server_ctx->free_endpoint_ctx(machine->server_ctx->endpoint_ctx);
@@ -131,18 +135,24 @@ int main(int argc, char *argv[]) {
       if (events[i].events & (EPOLLHUP | EPOLLRDHUP)) {
         for (size_t w = 0; w < MAX_EVENTS; w++) {
           if (events[i].data.fd == get_client_fd(&machine[w])) {
-            server_machine *selected = NULL;
+            server_machine *selected = nullptr;
             selected = &machine[w];
             if (selected->server_ctx &&
                 selected->server_ctx->free_endpoint_ctx &&
                 selected->server_ctx->endpoint_ctx) {
+
               selected->server_ctx->free_endpoint_ctx(
                   selected->server_ctx->endpoint_ctx);
-              selected->server_ctx->endpoint_ctx = NULL;
+
+              selected->server_ctx->endpoint_ctx = nullptr;
+              selected->server_ctx->free_endpoint_ctx = nullptr;
+            } else {
+              /* printf("147 no free_endpoint_ctx\n"); */
             }
 
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr);
             close(events[i].data.fd);
+            /* printf("EPOLLHUP|EPOLLRDHUP\n"); */
             server_machine_reset(selected);
 
             break;
@@ -164,10 +174,15 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
-      server_machine *selected = NULL;
+      server_machine *selected = nullptr;
       size_t w = 0;
 
       for (w = 0; w < MAX_EVENTS; w++) {
+        /* printf( */
+        /*     "events[i].data.fd == get_client_fd(&machine[w])\n%d == %d:
+         * %d\n", */
+        /*     events[i].data.fd, get_client_fd(&machine[w]), */
+        /*     events[i].data.fd == get_client_fd(&machine[w])); */
         if (events[i].data.fd == get_client_fd(&machine[w])) {
           selected = &machine[w];
           break;
@@ -178,6 +193,7 @@ int main(int argc, char *argv[]) {
         for (w = 0; w < MAX_EVENTS; w++) {
           if (get_state(&machine[w]) == WAITING) {
             selected = &machine[w];
+            /* printf("!selected\n"); */
             server_machine_reset(selected);
             set_client_fd(selected, events[i].data.fd);
 
@@ -212,8 +228,12 @@ int main(int argc, char *argv[]) {
           event.data.fd = events[i].data.fd;
           epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &event);
         }
+
+        /* printf("event_fd: %d\n", events[i].data.fd); */
+        /* printf("FINISHED/SOMETHING_WENT_WRONG:\n"); */
+        server_machine_reset(selected);
         shutdown(events[i].data.fd, SHUT_WR);
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr);
         break;
       }
       }
@@ -222,8 +242,22 @@ int main(int argc, char *argv[]) {
 
   routes_destroy();
   for (size_t i = 0; i < MAX_EVENTS; i++) {
+    if (machine[i].server_ctx->free_endpoint_ctx) {
+      machine[i].server_ctx->free_endpoint_ctx(
+          machine[i].server_ctx->endpoint_ctx);
+    } else {
+      /* printf("in the eeeenddd no free_endpoint_ctx\n"); */
+    }
+    if (machine[i].server_ctx->cursor)
+      free(machine[i].server_ctx->cursor);
+    if (machine[i].server_ctx)
+      free(machine[i].server_ctx);
     list_free(&machine[i].headers, list_default_callback);
     list_free(&machine[i].params, list_default_callback);
   }
+  vips_shutdown();
+  close(logger);
+  destroy_server(&s);
+  close(epoll_fd);
   return 0;
 }

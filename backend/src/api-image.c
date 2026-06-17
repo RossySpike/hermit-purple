@@ -81,6 +81,7 @@ int free_wrapper(void *ptr) {
   }
 
   free(p);
+  ptr = nullptr;
   return 0;
 }
 int free_get_api_image_cursor_ctx(void *p) {
@@ -100,6 +101,7 @@ int free_get_api_image_cursor_ctx(void *p) {
   ctx->metadata = nullptr;
   free(p);
 
+  /* printf("limpiado context de api_image_cursor\n"); */
   p = nullptr;
   return 0;
 }
@@ -123,20 +125,28 @@ endpoint_return api_jump_table(stream_cursor *cursor, server_machine *machine,
   size_t id = get_route_index(machine);
   switch (id) {
   case 0:
+    /* printf("get_api_image:\n"); */
     return get_api_image(machine, read_buffer);
   case 1:
+    /* printf("get_api_image_cursor:\n"); */
     return get_api_image_cursor(machine);
   case 2:
+    /* printf("post_api_image:\n"); */
     return post_api_image(cursor, machine, read_buffer);
   case 3:
+    /* printf("get_api_image_cursor_start:\n"); */
     return get_api_image_cursor_start(machine);
   case 4:
+    /* printf("options_api_image_cursor_start:\n"); */
     return options_api_image_cursor_start(machine);
   case 5:
+    /* printf("options_api_image_cursor:\n"); */
     return options_api_image_cursor(machine);
   case 6:
+    /* printf("options_api_image:\n"); */
     return options_api_image(machine);
   case 7:
+    /* printf("options_post_api_image:\n"); */
     return options_post_api_image(machine);
   default:
     unreachable();
@@ -193,6 +203,11 @@ int free_get_api_image_ctx(void *void_ctx) {
   if (ctx->f.fd > 0) {
     close_res = close(ctx->f.fd);
   }
+  if (ctx->f.name != nullptr) {
+
+    free(ctx->f.name);
+    ctx->f.name = nullptr;
+  }
   free(ctx);
   void_ctx = nullptr;
   return close_res;
@@ -205,6 +220,12 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
     const char *img_id = get_param(machine, "id");
     assert(img_id != nullptr);
     file f = {0};
+
+    struct get_api_image *ctx = malloc(sizeof(struct get_api_image));
+    machine->server_ctx->free_endpoint_ctx = free_get_api_image_ctx;
+    machine->server_ctx->endpoint_ctx = ctx;
+    // offset asigned later...
+
     if (strcasecmp(param, "original") == 0) {
       f = open_img_at(img_id, IMG_ORIGINAL_DIR);
 
@@ -219,6 +240,8 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
                   "Unsupported variant");
       return FINISHED;
     }
+    ctx->f = f;
+
     size_t last_dot = 0;
     for (size_t i = 0; f.name[i] != '\0'; i++) {
       if (f.name[i] == '.')
@@ -230,17 +253,18 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
              "Content-Length", f.size, cors_headers);
     assert(write(get_client_fd(machine), buffer, strlen(buffer)));
     ssize_t sent = sendfile(get_client_fd(machine), f.fd, nullptr, f.size);
+
+    ctx->offset = sent;
+
+    free(ctx->f.name);
+    ctx->f.name = nullptr;
+
     if (sent == 0) {
       return SOMETHING_WENT_WRONG;
     }
     if (sent == (ssize_t)f.size) {
       return FINISHED;
     }
-    struct get_api_image *ctx = malloc(sizeof(struct get_api_image));
-    ctx->f = f;
-    ctx->offset = sent;
-    machine->server_ctx->free_endpoint_ctx = free_get_api_image_ctx;
-    machine->server_ctx->endpoint_ctx = ctx;
     return NEED_WRITE_MORE_DATA;
   }
   struct get_api_image *ctx = machine->server_ctx->endpoint_ctx;
@@ -254,13 +278,11 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
     if (s < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK)
         return NEED_WRITE_MORE_DATA;
+
       return SOMETHING_WENT_WRONG;
       break;
     }
   }
-  /* if (f.fd > 0) { */
-  /*   close(f.fd); */
-  /* } */
 
   return FINISHED;
 }
@@ -277,7 +299,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     if (content_length == nullptr) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                   "Missing Content-Length header");
-      goto cleanup;
+      return FINISHED;
     }
 
     size_t colon_pos = 0;
@@ -289,7 +311,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     if (content_length[colon_pos] != ':') {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                   "Invalid Content-Length header");
-      goto cleanup;
+      return FINISHED;
     }
 
     size_t value_start = colon_pos + 1;
@@ -303,7 +325,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     if (content_length_val == 0) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                   "Content-Length cannot be 0");
-      goto cleanup;
+      return FINISHED;
     }
 
     size_t body_offset = cursor->offset;
@@ -313,7 +335,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     if (ft == FT_UNKNOWN) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                   "Unsupported file type");
-      goto cleanup;
+      return FINISHED;
     }
 
     unsigned long long my_idx = get_next_idx();
@@ -323,20 +345,22 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     if (filename_res < 0 || (unsigned long long)filename_res >= BUFFER) {
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "254");
-      goto cleanup;
+      return FINISHED;
     }
 
     int fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0644);
     if (fd < 0) {
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "261");
-      goto cleanup;
+      fd = -1;
+      return FINISHED;
     }
 
     ssize_t initial_w = write(fd, read_buffer + body_offset, bytes_en_buffer);
     if (initial_w < 0) {
       close(fd);
-      goto cleanup;
+      fd = -1;
+      return SOMETHING_WENT_WRONG;
     }
 
     ctx = malloc(sizeof(struct post_api_image));
@@ -344,13 +368,14 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "Out of memory");
       close(fd);
-      goto cleanup;
+      fd = -1;
+      return SOMETHING_WENT_WRONG;
     }
 
-    ctx->fd = fd;
+    ctx->fd = fd; // will get closed
     ctx->content_length_val = content_length_val;
     ctx->bytes_received = bytes_en_buffer;
-    ctx->filename = strdup(filename);
+    ctx->filename = strdup(filename); // should be freed
     ctx->my_idx = my_idx;
     ctx->headers_written = false;
     ctx->ft = ft;
@@ -361,11 +386,9 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     bzero(machine->server_ctx->read_buffer, BUFFER);
     bzero(read_buffer, BUFFER);
 
-    if (ctx->bytes_received >= ctx->content_length_val) {
-      goto process_image;
+    if (ctx->bytes_received < ctx->content_length_val) {
+      return NEED_READ_MORE_DATA;
     }
-
-    return NEED_READ_MORE_DATA;
   }
 
   // --- entrypoint for events ---
@@ -405,22 +428,21 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
     }
   }
 
-process_image:
   if (ctx->bytes_received != ctx->content_length_val) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "331");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   if (lseek(ctx->fd, 0, SEEK_SET) == (off_t)-1) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "338");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   VipsImage *in = nullptr;
   VipsSource *source = vips_source_new_from_descriptor(ctx->fd);
   if (!source) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "348");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
   if (fsync(ctx->fd) == -1) {
     // I may need to do something here.
@@ -438,7 +460,7 @@ process_image:
 
   if (!in) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "358");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   void *buffer_salida = NULL;
@@ -452,27 +474,27 @@ process_image:
   if (filename_res < 0 || filename_res >= BUFFER) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "375");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   if (resultado_save != 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "381");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   int fd_salida = open(thumbnail_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd_salida < 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "390");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   if (write(fd_salida, buffer_salida, tam_salida) < 0) {
     close(fd_salida);
     g_free(buffer_salida);
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "399");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   close(fd_salida);
@@ -489,27 +511,27 @@ process_image:
   if (filename_res < 0 || filename_res >= BUFFER) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "421");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   if (resultado_save != 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "427");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   fd_salida = open(cache_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd_salida < 0) {
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "436");
     g_free(buffer_salida);
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   if (write(fd_salida, buffer_salida, tam_salida) < 0) {
     close(fd_salida);
     g_free(buffer_salida);
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "445");
-    goto cleanup;
+    return SOMETHING_WENT_WRONG;
   }
 
   close(fd_salida);

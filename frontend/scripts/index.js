@@ -309,9 +309,13 @@ function closeModal() {
 }
 
 // Ev L
-uploadBtn.addEventListener("click", () => fileInput.click());
+uploadBtn.addEventListener("click", () => {
+  showError("✅ Uploading...");
+  fileInput.click();
+});
 fileInput.addEventListener("change", (e) => {
   if (e.target.files?.[0]) uploadImage(e.target.files[0]);
+
   fileInput.value = "";
 });
 

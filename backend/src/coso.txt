@@ -1,28 +1,40 @@
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-./src/api-image.c: En la función ‘get_api_image’:
-./src/api-image.c:236:14: warning: comparison of integer expressions of different signedness: ‘ssize_t’ {también conocido como ‘long int’} and ‘size_t’ {también conocido co
-mo ‘long unsigned int’} [-Wsign-compare]
-  236 |     if (sent == f.size) {
-      |              ^~
-./src/api-image.c: En la función ‘post_api_image’:
-./src/api-image.c:443:9: warning: variable ‘result’ sin usar [-Wunused-variable]
-  443 |     int result = vips_heifload_source(source, &in, "unlimited", TRUE, NULL);
-      |         ^~~~~~
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-./src/server.c:186:2: warning: #warning "bro I cant be this lazy lolllll" [-Wcpp]
-  186 | #warning "bro I cant be this lazy lolllll"
-      |  ^~~~~~~
-cc1: warning: ‘_FORTIFY_SOURCE’ is not enabled by ‘-fhardened’ because optimizations are turned off [-Whardened]
-main.c: En la función ‘main’:
-main.c:133:26: warning: comparison of integer expressions of different signedness: ‘size_t’ {también conocido como ‘long unsigned int’} and ‘int’ [-Wsign-compare]
-  133 |     for (size_t i = 0; i < n_events; i++) {
-      |                          ^
-
+==40347== FILE DESCRIPTORS: 9 open (3 inherited) at exit.
+==40347== Open AF_INET socket 11: 127.0.0.1:1600 <-> <unbound>
+==40347==    at 0x501EB0D: accept (accept.c:26)
+==40347==    by 0x4007831: init_client (server.c:86)
+==40347==    by 0x400951B: main (main.c:165)
+==40347==
+==40347== Open file descriptor 10: /tmp/cache/1.jpeg
+==40347==    at 0x500F7A6: open (open64.c:41)
+==40347==    by 0x4005E61: open_file (files.c:16)
+==40347==    by 0x40063D9: open_img_at (files.c:96)
+==40347==    by 0x40032BA: get_api_image (api-image.c:237)
+==40347==    by 0x4002C94: api_jump_table (api-image.c:129)
+==40347==    by 0x4008AFB: server_job (server.c:511)
+==40347==    by 0x40097E6: main (main.c:208)
+==40347==
+==40347== Open AF_INET socket 9: 127.0.0.1:1600 <-> <unbound>
+==40347==    at 0x501EB0D: accept (accept.c:26)
+==40347==    by 0x4007831: init_client (server.c:86)
+==40347==    by 0x400951B: main (main.c:165)
+==40347==
+==40347== Open file descriptor 8: /tmp/cache/2.jpeg
+==40347==    at 0x500F7A6: open (open64.c:41)
+==40347==    by 0x4005E61: open_file (files.c:16)
+==40347==    by 0x40063D9: open_img_at (files.c:96)
+==40347==    by 0x40032BA: get_api_image (api-image.c:237)
+==40347==    by 0x4002C94: api_jump_table (api-image.c:129)
+==40347==    by 0x4008AFB: server_job (server.c:511)
+==40347==    by 0x40097E6: main (main.c:208)
+==40347==
+==40347== Open AF_INET socket 7: 127.0.0.1:1600 <-> <unbound>
+==40347==    at 0x501EB0D: accept (accept.c:26)
+==40347==    by 0x4007831: init_client (server.c:86)
+==40347==    by 0x400951B: main (main.c:165)
+==40347==
+==40347== Open AF_INET socket 6: 127.0.0.1:1600 <-> <unbound>
+==40347==    at 0x501EB0D: accept (accept.c:26)
+==40347==    by 0x4007831: init_client (server.c:86)
+==40347==    by 0x400951B: main (main.c:165)
+==40347==
+==40347==

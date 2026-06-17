@@ -94,7 +94,7 @@ file open_img_at(const char *id, const char *path) {
       char b[BUFFER] = {0};
       snprintf(b, sizeof(b), "%s%s", path, entry->d_name);
       open_file(&f, b, O_RDONLY);
-      f.name = entry->d_name;
+      f.name = strdup(entry->d_name);
 
       break;
     }

@@ -6,7 +6,7 @@
 #include <strings.h>
 void server_machine_init(server_machine *machine) {
   machine->state = WAITING;
-  machine->client_fd = -1; // ← AÑADIR ESTO
+  machine->client_fd = -1;
   machine->server_ctx = (server_ctx *)calloc(1, sizeof(server_ctx));
   machine->server_ctx->cursor =
       (stream_cursor *)calloc(1, sizeof(stream_cursor));

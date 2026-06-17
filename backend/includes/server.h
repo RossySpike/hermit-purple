@@ -31,4 +31,5 @@ int init_sock_server(server *s);
 int init_server(server *s);
 endpoint_return server_job(void *args);
 int init_client(server *s);
+int destroy_server(server *s);
 #endif
