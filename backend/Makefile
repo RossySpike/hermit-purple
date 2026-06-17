@@ -1,7 +1,7 @@
 CC := gcc
 CFLAGS_BASE := -std=gnu23 -Wno-unused-parameter -Wpedantic -Wall -Wextra \
                -fhardened -fstack-protector-strong -fcf-protection
-LD_FLAGS := -L $(shell pkg-config --cflags --libs glib-2.0 gobject-2.0)  -lvips
+LD_FLAGS := -L/home/honey/proyectos/hermit-purple/backend/includes/libs/vips/lib $(shell pkg-config --cflags --libs glib-2.0 gobject-2.0)  -lvips
 SRCS     := $(wildcard ./src/*.c) main.c
 
 

@@ -259,6 +259,7 @@ async function uploadImage(file) {
         headers: { "Content-Length": arrayBuffer.byteLength.toString() },
         body: arrayBuffer,
       });
+      showError("✅ Uploading...");
 
       if (!response.ok)
         throw new Error(`Failed to upload image: ${response.status}`);
@@ -309,13 +310,9 @@ function closeModal() {
 }
 
 // Ev L
-uploadBtn.addEventListener("click", () => {
-  showError("✅ Uploading...");
-  fileInput.click();
-});
+uploadBtn.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", (e) => {
   if (e.target.files?.[0]) uploadImage(e.target.files[0]);
-
   fileInput.value = "";
 });
 
