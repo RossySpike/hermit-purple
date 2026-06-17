@@ -1,6 +1,11 @@
-./**/**/vgcore.*
-./**/**/*.out
-./backend/src/mkdir.c
-./backend/Makefile
-./notes
-./vips-8.18.3.tar.xz
+vgcore.*
+*.out
+backend/test/hermit-purple
+backend/test/*.out
+backend/test/*.debug
+backend/test/*.test
+backend/test/*.static
+backend/build/
+backend/*.o
+backend/*.d
+backend/Makefile
