@@ -542,7 +542,6 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
 
   created(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
 
-cleanup:
   return FINISHED;
 }
 endpoint_return get_api_image_cursor(server_machine *machine) {
