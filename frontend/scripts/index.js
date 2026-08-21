@@ -1,7 +1,10 @@
+// const API_BASE = "http://100.101.233.121:1600";
 const API_BASE = "http://localhost:1600";
+// const API_BASE = "http://192.168.0.10:1600"
+//
 // TODO: hacer que sea obtenido de input
 const DEFAULT_LIMIT = 4;
-const BATCHES_PER_PAGE = 3;
+const BATCHES_PER_PAGE = 1;
 //
 
 let currentImgId = null;
@@ -47,7 +50,7 @@ function setLoading(loading) {
       loadMoreBtn.textContent = loadMoreBtnNoMoreText;
     } else {
       loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = loadMoreBtnNoMoreText;
+      loadMoreBtn.textContent = "Load More";
     }
   }
 }
@@ -116,16 +119,20 @@ async function fetchSingleBatch() {
 
   let dynamicLimit = DEFAULT_LIMIT;
   if (currentImgId <= DEFAULT_LIMIT) {
-    dynamicLimit = currentImgId - 1;
+    dynamicLimit = currentImgId;
   }
 
-  if (dynamicLimit <= 1) {
+
+
+  const url = `${API_BASE}/api/image/cursor?current=${currentImgId}&limit=${dynamicLimit}`;
+  console.log("url: "
+    , url);
+
+  currentImgId -= dynamicLimit;
+  if (dynamicLimit < 1) {
     hasMore = false;
     return [];
   }
-
-  const url = `${API_BASE}/api/image/cursor?current=${currentImgId}&limit=${dynamicLimit}`;
-
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -136,7 +143,8 @@ async function fetchSingleBatch() {
     }
     return await parseCursorResponse(arrayBuffer);
   } catch (err) {
-    console.error("Error fetching batch:", err);
+    console.error("Error fetching batch:", err, await response.text());
+
     throw err;
   }
 }
@@ -163,6 +171,7 @@ async function loadMultipleBatches() {
       currentImgId >= 0
     ) {
       const images = await fetchSingleBatch();
+      console.log("images:")
       console.log(images);
 
       if (images.length === 0) {
@@ -177,27 +186,16 @@ async function loadMultipleBatches() {
       batchesLoaded++;
 
       const imgIds = images.map((i) => i.img_id);
-      const minImgId = Math.min(...imgIds);
-      const nextCurrent = minImgId - 1;
 
-      if (nextCurrent < 0) {
+      console.log("currentImgId: ", currentImgId);
+      if (currentImgId === 0) {
         hasMore = false;
-        currentImgId = null;
-      } else if (
-        images.length < DEFAULT_LIMIT &&
-        currentImgId + 1 <= DEFAULT_LIMIT
-      ) {
-        hasMore = false;
-        currentImgId = null;
-      } else {
-        currentImgId = nextCurrent + 1;
       }
 
       await new Promise((r) => setTimeout(r, 50));
     }
   } catch (err) {
     console.log(err.message);
-    showError(`Error loading image batches: ${err.message}`);
   } finally {
     isLoading = false;
     setLoading(false);
@@ -287,11 +285,13 @@ async function initGallery() {
 
   try {
     const startResp = await fetch(`${API_BASE}/api/image/cursor/start`);
+    console.log(`${API_BASE}/api/image/cursor/start`);
     if (!startResp.ok) throw new Error(`start error: ${startResp.status}`);
     const text = await startResp.text();
     const maxIdx = parseInt(text.trim(), 10);
     if (isNaN(maxIdx)) throw new Error("Invalid start number");
     currentImgId = maxIdx;
+    console.log("currentImgId: ", currentImgId);
     await loadMultipleBatches();
   } catch (err) {
     showError(`Failed: ${err.message}`);

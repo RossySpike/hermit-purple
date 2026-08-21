@@ -524,13 +524,6 @@ endpoint_return server_job(void *args) {
       set_state(local_machine, WAITING);
       return ret;
     }
-    /* case ENDING: { */
-    /*   close(get_client_fd(local_machine)); */
-    /*   set_state(local_machine, WAITING); */
-    /*   printf("case ENDING\n"); */
-    /*   return FINISHED; */
-    /*   break; */
-    /* } */
     default:
       unreachable();
     }

@@ -1,4 +1,4 @@
-#include "../includes/list.h"
+#include "list.h"
 #include <assert.h>
 #include <stdlib.h>
 
@@ -35,7 +35,7 @@ int list_insert(list_t *l, void *element, size_t index) {
   return 0;
 }
 
-void list_default_callback(void *element) {
+void list_default_callback(void **element) {
   if (!element)
     return;
   free(element);
@@ -53,7 +53,7 @@ int list_pop(list_t *l, void (*callback)(void *)) {
   return 0;
 }
 
-void list_free_contents(list_t *l, void (*callback)(void *)) {
+void list_free_contents(list_t *l, void (*callback)(void **)) {
   if (!l || !l->array || l->len == 0)
     return;
 
@@ -65,7 +65,7 @@ void list_free_contents(list_t *l, void (*callback)(void *)) {
   }
   l->len = 0;
 }
-void list_free(list_t *l, void (*callback)(void *)) {
+void list_free(list_t *l, void (*callback)(void **)) {
   for (size_t i = 0; i < l->len; i++) {
     if (callback)
       callback(l->array[i]);

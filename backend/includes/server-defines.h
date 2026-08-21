@@ -12,6 +12,12 @@
 #define HOST_NAME "hermit"
 
 #define PORT 1600
+
+typedef enum { LOG_DISABLED, LOG_BASIC, LOG_MEDIUM, LOG_HIGH } log_level;
+
+#define LOG_LEVEL LOG_HIGH
+// #define LOG_FILE
+
 #define BACKLOG 1
 
 #define HTTP_VERSION "HTTP/1.1"

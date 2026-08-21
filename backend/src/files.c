@@ -1,5 +1,7 @@
 #include "../includes/files.h"   // for fperror
 #include "../includes/defines.h" // for fperror
+#include "logger.h"
+#include <inttypes.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -13,6 +15,9 @@
 #include <sys/types.h>
 #include <unistd.h> // for close() function
 int open_file(file *f, const char *r_path, int flag) {
+#if LOG_LEVEL == LOG_HIGH
+  logger_log("%s: r_path: %s\n", __func__, r_path);
+#endif
   f->fd = open(r_path, flag);
   if (f->fd < 0) {
     fperror;
@@ -102,46 +107,27 @@ file open_img_at(const char *id, const char *path) {
   closedir(dir);
   return f; // not found.
 }
+#warning "I should handle file not found case"
 unsigned long long *open_files_to_arr(const char *path, file *const out,
-                                      unsigned short *const n_files,
-                                      unsigned long long start_file_id) {
+                                      uint64_t *files_arr,
+                                      size_t files_arr_size) {
 
-  if (*n_files > start_file_id) {
-    return nullptr;
+#if LOG_LEVEL == LOG_HIGH
+  logger_log("open_files_to_arr: arr_size: %lu\n", files_arr_size);
+#endif
+  char curr_filename[21];
+
+  for (size_t i = 0; i < files_arr_size; i++) {
+
+    snprintf(curr_filename, sizeof(curr_filename), "%" PRIu64 ".webp",
+             files_arr[i]);
+    char b[BUFFER] = {0};
+    snprintf(b, sizeof(b), "%s%s", path, curr_filename);
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("%s\n", b);
+#endif
+    open_file(&out[i], b, O_RDONLY);
   }
-  unsigned short arr_idx = 0;
-  unsigned long long *f_names_to_ull =
-      malloc(sizeof(unsigned long long) * (*n_files + 1));
 
-  bool should_exit = false;
-  while (!should_exit && arr_idx < *n_files) {
-    DIR *dir = opendir(path);
-    struct dirent *entry;
-    assert(dir);
-    char curr_filename[21];
-    snprintf(curr_filename, sizeof(curr_filename), "%llu",
-             start_file_id - (arr_idx + 1));
-
-    /* && entry != nullptr && arr_idx != *n_files */
-    while ((entry = readdir(dir))) {
-      size_t i = 0;
-      for (; (entry->d_name[i] != '\0' && isdigit(entry->d_name[i])); i++)
-        ;
-
-      if (i > 0 && strncmp(entry->d_name, curr_filename, i) == 0) {
-        char b[BUFFER] = {0};
-        snprintf(b, sizeof(b), "%s%s", path, entry->d_name);
-        open_file(&out[arr_idx], b, O_RDONLY);
-        f_names_to_ull[arr_idx] = start_file_id - (arr_idx + 1);
-        arr_idx++;
-        break;
-      } else {
-      }
-    }
-    should_exit = entry == nullptr;
-    closedir(dir);
-  }
-  *n_files = arr_idx;
-  f_names_to_ull[arr_idx] = 0; // Mark the end of the array with a 0
-  return arr_idx == 0 ? nullptr : f_names_to_ull;
+  return (unsigned long long *)files_arr;
 }

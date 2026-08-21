@@ -1,11 +1,14 @@
 #include "../includes/common-response.h"
+#include "../includes/file-controller.h"
 #include "../includes/files.h"
 #include "../includes/server-defines.h"
 #include "../includes/server-machine.h"
+#include "logger.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h> // for open() function
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h> //bzero
@@ -14,7 +17,12 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h> // for close() function
+#ifdef IS_BUNDLED
+#include "../includes/libs/vips/include/vips/vips.h"
+#else
 #include <vips/vips.h>
+#endif
+
 typedef enum SUPPORTED_FILETYPE {
   FT_UNKNOWN = -1, // err value
   FT_PNG = 0,
@@ -58,7 +66,7 @@ struct get_api_image_cursor {
   unsigned long long total_size;
   unsigned short lim;
 
-  unsigned long long *files_ids;
+  batch_t files_ids;
   bool headers_written;
   unsigned short idx_metadata_written;
   off_t metadata_off;
@@ -77,6 +85,7 @@ int free_wrapper(void *ptr) {
 
   if (p->fd > 0) {
     close(p->fd);
+
     p->fd = -1;
   }
 
@@ -86,22 +95,24 @@ int free_wrapper(void *ptr) {
 }
 int free_get_api_image_cursor_ctx(void *p) {
   struct get_api_image_cursor *ctx = (struct get_api_image_cursor *)p;
-  for (unsigned short i = 0; ctx->files_ids[i] != 0; i++) {
+  for (unsigned short i = 0; i < ctx->files_ids.size; i++) {
 
     if (ctx->files[i].fd > 0) {
       close(ctx->files[i].fd);
       ctx->files[i].fd = -1;
     }
   }
-  free(ctx->files_ids);
-  ctx->files_ids = nullptr;
+  free(ctx->files_ids.batch);
+  ctx->files_ids.batch = nullptr;
   free(ctx->files);
   ctx->files = nullptr;
   free(ctx->metadata);
   ctx->metadata = nullptr;
   free(p);
 
-  /* printf("limpiado context de api_image_cursor\n"); */
+#if LOG_LEVEL == LOG_HIGH
+  logger_log("limpiado context de api_image_cursor\n");
+#endif
   p = nullptr;
   return 0;
 }
@@ -125,28 +136,44 @@ endpoint_return api_jump_table(stream_cursor *cursor, server_machine *machine,
   size_t id = get_route_index(machine);
   switch (id) {
   case 0:
-    /* printf("get_api_image:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("get_api_image:\n");
+#endif
     return get_api_image(machine, read_buffer);
   case 1:
-    /* printf("get_api_image_cursor:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("get_api_image_cursor:\n");
+#endif
     return get_api_image_cursor(machine);
   case 2:
-    /* printf("post_api_image:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("post_api_image:\n");
+#endif
     return post_api_image(cursor, machine, read_buffer);
   case 3:
-    /* printf("get_api_image_cursor_start:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("get_api_image_cursor_start:\n");
+#endif
     return get_api_image_cursor_start(machine);
   case 4:
-    /* printf("options_api_image_cursor_start:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("options_api_image_cursor_start:\n");
+#endif
     return options_api_image_cursor_start(machine);
   case 5:
-    /* printf("options_api_image_cursor:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("options_api_image_cursor:\n");
+#endif
     return options_api_image_cursor(machine);
   case 6:
-    /* printf("options_api_image:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("options_api_image:\n");
+#endif
     return options_api_image(machine);
   case 7:
-    /* printf("options_post_api_image:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("options_post_api_image:\n");
+#endif
     return options_post_api_image(machine);
   default:
     unreachable();
@@ -541,6 +568,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   in = nullptr;
 
   created(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+  file_controller_record_file((uint64_t)ctx->my_idx);
 
   return FINISHED;
 }
@@ -559,12 +587,12 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     unsigned long long lim_tmp = strtoull(limit, nullptr, 10);
     unsigned short lim = (unsigned short)lim_tmp;
 
-    if (lim == 0 || curr < (unsigned long long)(lim + 1)) {
+    if (lim == 0 || curr < (unsigned long long)(lim)) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid limit parameter");
       return FINISHED;
     }
-    if (curr > (get_idx() + 1)) {
+    if (curr > (get_idx())) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Current parameter exceeds available images");
       return FINISHED;
@@ -578,10 +606,13 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     }
 
     unsigned short actual_lim = lim;
-    unsigned long long *files_ids =
-        open_files_to_arr(IMG_THUMBNAIL_DIR, files, &actual_lim, curr);
+    batch_t files_ids = file_controller_get_batch(curr, actual_lim);
+    open_files_to_arr(IMG_THUMBNAIL_DIR, files, files_ids.batch,
+                      files_ids.size);
+    /* unsigned long long *files_ids = */
+    /*     open_files_to_arr(IMG_THUMBNAIL_DIR, files, &actual_lim, curr); */
 
-    if (files_ids == nullptr || actual_lim == 0) {
+    if (files_ids.batch == nullptr || files_ids.size == 0) {
       free(files);
       char buffer[BUFFER] = {0};
       snprintf(buffer, BUFFER,
@@ -595,9 +626,9 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
       return FINISHED;
     }
 
-    img_metadata *metadata = malloc(sizeof(img_metadata) * actual_lim);
+    img_metadata *metadata = malloc(sizeof(img_metadata) * files_ids.size);
     if (!metadata) {
-      free(files_ids);
+      free(files_ids.batch);
       free(files);
       internal_server_error(get_client_fd(machine), BUFFER, nullptr,
                             "Memory allocation failed");
@@ -662,7 +693,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
 
     if (ctx->idx_metadata_written == i) {
       ctx->metadata[i] = (img_metadata){.idx = i,
-                                        .img_id = ctx->files_ids[i],
+                                        .img_id = ctx->files_ids.batch[i],
                                         .img_size = ctx->files[i].size};
 
       size_t total = sizeof(img_metadata);
@@ -740,7 +771,7 @@ endpoint_return get_api_image_cursor_start(server_machine *machine) {
 
   char buffer[BUFFER] = {0};
   snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s\r\n\r\n%llu",
-           "Server", HOST_NAME, cors_headers, get_idx() + 1);
+           "Server", HOST_NAME, cors_headers, get_idx());
   assert(write(get_client_fd(machine), buffer, strlen(buffer)));
   return FINISHED;
 }

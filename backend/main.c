@@ -1,23 +1,27 @@
-#include "./includes/files.h"
-#include "./includes/server-defines.h"
-#include "./includes/server-machine.h"
-#include "./includes/server-routes.h"
-#include "./includes/server.h"
-#include "includes/list.h"
+#include "files.h"
+#include "list.h"
+#include "logger.h"
+#include "server-defines.h"
+#include "server-machine.h"
+#include "server-routes.h"
+#include "server.h"
 #include <assert.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef IS_BUNDLED
+#include "./includes/libs/vips/include/vips/vips.h"
+#else
 #include <vips/vips.h>
+#endif
+#include "./includes/file-controller.h"
 
 #define MAX_EVENTS 10
-int logger;
 
 void server_machine_reset(server_machine *machine) {
   if (!machine)
@@ -56,10 +60,12 @@ void server_machine_reset(server_machine *machine) {
       machine->server_ctx->cursor->read_bytes = 0;
       bzero(machine->server_ctx->cursor->memory, BUFFER);
     }
+#if LOG_LEVEL == LOG_HIGH
+    logger_log("machine->server_ctx: %p        \n", machine->server_ctx);
+    logger_log("machine->server_ctx->free_endpoint_ctx: %p        \n",
+               (void *)machine->server_ctx->free_endpoint_ctx);
+#endif
 
-    /* printf("machine->server_ctx: %p        \n", machine->server_ctx); */
-    /* printf("machine->server_ctx->free_endpoint_ctx: %p        \n", */
-    /*        (void *)machine->server_ctx->free_endpoint_ctx); */
     if (machine->server_ctx->endpoint_ctx &&
         machine->server_ctx->free_endpoint_ctx) {
       machine->server_ctx->free_endpoint_ctx(machine->server_ctx->endpoint_ctx);
@@ -84,10 +90,12 @@ unsigned long long get_next_idx() {
   return current;
 }
 
-unsigned long long get_idx() { return current; }
+unsigned long long get_idx() { return file_controller_get_length(); }
 
 int main(int argc, char *argv[]) {
-  logger = open("./log", O_CREAT | O_RDWR | O_TRUNC, 0644);
+
+  logger_init();
+
   if (VIPS_INIT(argv[0])) {
     return 1;
   }
@@ -97,9 +105,10 @@ int main(int argc, char *argv[]) {
   attempt_create_dir(IMG_ORIGINAL_DIR, S_IRUSR | S_IWUSR | S_IXUSR);
   attempt_create_dir(IMG_THUMBNAIL_DIR, S_IRUSR | S_IWUSR | S_IXUSR);
   attempt_create_dir(IMG_CACHE_DIR, S_IRUSR | S_IWUSR | S_IXUSR);
+  file_controller_init();
 
   if (current == 0) {
-    current = get_biggest_index(IMG_ORIGINAL_DIR);
+    current = file_controller_get_current();
   }
 
   server s;
@@ -126,7 +135,13 @@ int main(int argc, char *argv[]) {
     set_client_fd(&machine[i], -1);
   }
 
+#ifdef DEBUG_MAX_CYCLES
+  for (size_t i = 0; i < DEBUG_MAX_CYCLES; i++) {
+    printf("DEBUG_MAX_CYCLES: %d\n", DEBUG_MAX_CYCLES);
+#else
   for (;;) {
+    printf("DEBUG_MAX_CYCLES: UNDEFINED\n");
+#endif
     int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
     if (n_events == -1)
       return -1;
@@ -147,12 +162,17 @@ int main(int argc, char *argv[]) {
               selected->server_ctx->endpoint_ctx = nullptr;
               selected->server_ctx->free_endpoint_ctx = nullptr;
             } else {
-              /* printf("147 no free_endpoint_ctx\n"); */
+
+#if LOG_LEVEL == LOG_HIGH
+              logger_log("161 no free_endpoint_ctx\n");
+#endif
             }
 
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr);
             close(events[i].data.fd);
-            /* printf("EPOLLHUP|EPOLLRDHUP\n"); */
+#if LOG_LEVEL == LOG_HIGH
+            logger_log("EPOLLHUP|EPOLLRDHUP\n");
+#endif
             server_machine_reset(selected);
 
             break;
@@ -178,11 +198,12 @@ int main(int argc, char *argv[]) {
       size_t w = 0;
 
       for (w = 0; w < MAX_EVENTS; w++) {
-        /* printf( */
-        /*     "events[i].data.fd == get_client_fd(&machine[w])\n%d == %d:
-         * %d\n", */
-        /*     events[i].data.fd, get_client_fd(&machine[w]), */
-        /*     events[i].data.fd == get_client_fd(&machine[w])); */
+#if LOG_LEVEL == LOG_HIGH
+        logger_log(
+            "events[i].data.fd == get_client_fd(&machine[w])\n%d == %d:% d\n ",
+            events[i].data.fd, get_client_fd(&machine[w]),
+            events[i].data.fd == get_client_fd(&machine[w]));
+#endif
         if (events[i].data.fd == get_client_fd(&machine[w])) {
           selected = &machine[w];
           break;
@@ -193,7 +214,9 @@ int main(int argc, char *argv[]) {
         for (w = 0; w < MAX_EVENTS; w++) {
           if (get_state(&machine[w]) == WAITING) {
             selected = &machine[w];
-            /* printf("!selected\n"); */
+#if LOG_LEVEL == LOG_HIGH
+            logger_log("!selected\n");
+#endif
             server_machine_reset(selected);
             set_client_fd(selected, events[i].data.fd);
 
@@ -229,8 +252,10 @@ int main(int argc, char *argv[]) {
           epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &event);
         }
 
-        /* printf("event_fd: %d\n", events[i].data.fd); */
-        /* printf("FINISHED/SOMETHING_WENT_WRONG:\n"); */
+#if LOG_LEVEL == LOG_HIGH
+        logger_log("event_fd: %d\n", events[i].data.fd);
+        logger_log("FINISHED/SOMETHING_WENT_WRONG:\n");
+#endif
         server_machine_reset(selected);
         shutdown(events[i].data.fd, SHUT_WR);
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, nullptr);
@@ -246,7 +271,10 @@ int main(int argc, char *argv[]) {
       machine[i].server_ctx->free_endpoint_ctx(
           machine[i].server_ctx->endpoint_ctx);
     } else {
-      /* printf("in the eeeenddd no free_endpoint_ctx\n"); */
+
+#if LOG_LEVEL == LOG_HIGH
+      logger_log("in the eeeenddd no free_endpoint_ctx\n");
+#endif
     }
     if (machine[i].server_ctx->cursor)
       free(machine[i].server_ctx->cursor);
@@ -256,8 +284,8 @@ int main(int argc, char *argv[]) {
     list_free(&machine[i].params, list_default_callback);
   }
   vips_shutdown();
-  close(logger);
   destroy_server(&s);
+  logger_destroy();
   close(epoll_fd);
   return 0;
 }
