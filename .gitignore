@@ -11,4 +11,4 @@ backend/*.o
 backend/*.d
 backend/Makefile
 backend/note.md
-backend/*.log
+backend/**/*.log
