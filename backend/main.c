@@ -136,11 +136,11 @@ int main(int argc, char *argv[]) {
   }
 
 #ifdef DEBUG_MAX_CYCLES
+  logger_log("DEBUG_MAX_CYCLES: %d\n", DEBUG_MAX_CYCLES);
   for (size_t i = 0; i < DEBUG_MAX_CYCLES; i++) {
-    printf("DEBUG_MAX_CYCLES: %d\n", DEBUG_MAX_CYCLES);
 #else
+  logger_log("DEBUG_MAX_CYCLES: UNDEFINED\n");
   for (;;) {
-    printf("DEBUG_MAX_CYCLES: UNDEFINED\n");
 #endif
     int n_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
     if (n_events == -1)

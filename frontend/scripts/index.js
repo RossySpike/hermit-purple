@@ -1,10 +1,10 @@
-// const API_BASE = "http://100.101.233.121:1600";
-const API_BASE = "http://localhost:1600";
+const API_BASE = "http://100.101.233.121:1600";
+// const API_BASE = "http://localhost:1600";
 // const API_BASE = "http://192.168.0.10:1600"
 //
 // TODO: hacer que sea obtenido de input
 const DEFAULT_LIMIT = 4;
-const BATCHES_PER_PAGE = 1;
+const BATCHES_PER_PAGE = 3;
 //
 
 let currentImgId = null;
@@ -321,3 +321,33 @@ window.addEventListener("click", (e) => {
 });
 
 initGallery();
+
+ticking = false;
+document.addEventListener("scroll", (event) => {
+  lastKnownPos = window.scrollY;
+  // console.log("aqui")
+  const childs = galleryEl.childNodes
+  // console.log(childs);
+  const filtered = [...childs].filter((val) => "classList" in val).filter((node) => node.classList.contains("card"));
+  console.log("filter")
+
+  console.log(filtered.length)
+  let lastImage = undefined;
+  if (filtered.length === 1) {
+    lastImage = filtered[filtered.length - 1];
+
+    console.log(`lastImage: ${lastImage.getBoundingClientRect().top + lastKnownPos}`)
+  }
+
+  // filtered.forEach((a) => console.log(a.classList.contains("card")));
+  // console.log(galleryEl.childNodes.entries().filter((child) => child.clasList.entries.some((child_class) => "card" === child_class)));
+  if (!ticking) {
+
+    setTimeout(() => {
+      if (hasMore && lastImage && lastImage.getBoundingClientRect().top + lastKnownPos <= lastKnownPos);
+      loadMultipleBatches();
+      ticking = false;
+    }, 20);
+  }
+  ticking = true;
+})
