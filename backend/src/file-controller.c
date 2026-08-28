@@ -1,22 +1,27 @@
 #include "../includes/file-controller.h"
 #include "../includes/server-defines.h"
+#include "defines.h"
+#include "files.h"
 #include "logger.h"
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static file_controller *controller = {0};
 
 #define this (*controller)
 #define this_at(idx) ((uint64_t)(uintptr_t)this.images.array[idx])
 int sort_asc(const void *a, const void *b) {
-  const uint64_t x = (uint64_t)(uintptr_t) * (void *const *)a;
+  const uint64_t x = (uint64_t)(uintptr_t)*(void *const *)a;
 
-  const uint64_t y = (uint64_t)(uintptr_t) * (void *const *)b;
+  const uint64_t y = (uint64_t)(uintptr_t)*(void *const *)b;
 
   if (x < y)
     return -1;
@@ -152,3 +157,16 @@ batch_t file_controller_get_batch(uint64_t start, size_t size) {
   return batch;
 }
 uint64_t file_controller_get_current() { return this_at(this.images.len - 1); }
+uint64_t file_controller_get_next_index() {
+  return this.images.len == 0 ? 1 : file_controller_get_current() + 1;
+}
+file file_controller_open_image_by_idx(const char *const idx,
+                                       const char *const path) {
+
+  size_t position = 0;
+#warning "check for overflow"
+  uint64_t idx_as_num = strtoull(idx, nullptr, 10);
+
+  bool idx_is_registered = file_controller_find(idx_as_num, &position);
+  return !idx_is_registered ? (file){0} : open_img_at(idx, path);
+}

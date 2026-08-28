@@ -1,7 +1,6 @@
 #ifndef SERVER_MACHINE_H
 #define SERVER_MACHINE_H
 #include "../includes/list.h"
-#include "server-defines.h"
 #include "server.h"
 typedef enum server_states {
   WAITING,

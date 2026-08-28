@@ -1,3 +1,4 @@
+#include "defines.h"
 #include "files.h"
 #include "list.h"
 #include "logger.h"
@@ -14,6 +15,7 @@
 #include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #ifdef IS_BUNDLED
 #include "./includes/libs/vips/include/vips/vips.h"
 #else
@@ -22,7 +24,13 @@
 #include "./includes/file-controller.h"
 
 #define MAX_EVENTS 10
+#warning "HANDLE 100 continue header"
+#warning "errs on content-length 0"
+#warning                                                                       \
+    "here start time out to kill the request maybe with timerfd and hook it to epoll"
 
+#warning                                                                       \
+    "for strtoull ERRORS This function does not modify errno on success. ERANGE The resulting value was out of range. The implementation may also set errno to EINVAL in case no conversion was performed(no digits seen, and 0 returned)"
 void server_machine_reset(server_machine *machine) {
   if (!machine)
     return;
@@ -82,13 +90,7 @@ void server_machine_reset(server_machine *machine) {
 
 unsigned long long current = 0;
 
-unsigned long long get_next_idx() {
-  if (current == 0) {
-    current = get_biggest_index(IMG_ORIGINAL_DIR);
-  }
-  current++;
-  return current;
-}
+unsigned long long get_next_idx() { return file_controller_get_next_index(); }
 
 unsigned long long get_idx() { return file_controller_get_length(); }
 
@@ -138,6 +140,7 @@ int main(int argc, char *argv[]) {
 #ifdef DEBUG_MAX_CYCLES
   logger_log("DEBUG_MAX_CYCLES: %d\n", DEBUG_MAX_CYCLES);
   for (size_t i = 0; i < DEBUG_MAX_CYCLES; i++) {
+    printf("CYCLE: %d out of %d\n", i, DEBUG_MAX_CYCLES);
 #else
   logger_log("DEBUG_MAX_CYCLES: UNDEFINED\n");
   for (;;) {

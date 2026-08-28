@@ -1,6 +1,7 @@
 // You either love me or hate me
 #include "logger.h"
 #include "server-defines.h"
+#include <errno.h>
 #include <string.h>
 
 #include <assert.h>

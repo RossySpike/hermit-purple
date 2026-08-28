@@ -12,3 +12,11 @@ backend/*.d
 backend/Makefile
 backend/note.md
 backend/**/*.log
+test.*.*
+backend/**/*.heic
+backend/**/*.jpg
+backend/**/*.jpeg
+backend/**/*.png
+backend/**/*.webp
+.gdb*
+tests.env

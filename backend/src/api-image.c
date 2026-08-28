@@ -254,17 +254,23 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
     // offset asigned later...
 
     if (strcasecmp(param, "original") == 0) {
-      f = open_img_at(img_id, IMG_ORIGINAL_DIR);
+      f = file_controller_open_image_by_idx(img_id, IMG_ORIGINAL_DIR);
 
     } else if (strcasecmp(param, "thumbnail") == 0) {
 
-      f = open_img_at(img_id, IMG_THUMBNAIL_DIR);
+      f = file_controller_open_image_by_idx(img_id, IMG_THUMBNAIL_DIR);
     } else if (strcasecmp(param, "compressed") == 0) {
 
-      f = open_img_at(img_id, IMG_CACHE_DIR);
+      f = file_controller_open_image_by_idx(img_id, IMG_CACHE_DIR);
     } else {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Unsupported variant");
+      return FINISHED;
+    }
+#warning "Theres no handling if the provided id isnt found"
+    if (f.fd == 0) {
+      bad_request(get_client_fd(machine), BUFFER, nullptr, "Image not found");
+
       return FINISHED;
     }
     ctx->f = f;
@@ -584,6 +590,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     }
     const char *limit = get_param(machine, "limit");
     assert(limit != nullptr);
+#warning "This is a no no"
     unsigned long long lim_tmp = strtoull(limit, nullptr, 10);
     unsigned short lim = (unsigned short)lim_tmp;
 

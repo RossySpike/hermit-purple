@@ -1,5 +1,9 @@
 #ifndef SERVER_ROUTES_H
 #define SERVER_ROUTES_H
+#include "defines.h"
+#include "http-sanitize.h"
+#include <regex.h>
+
 #include "../includes/server-defines.h"
 
 #include <stddef.h>

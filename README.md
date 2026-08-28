@@ -20,9 +20,9 @@ deps:
 - libpng
 - libwebp
 
-### endpoints:
+### endpoints
 
-TODO!
+Documentation available in **"./backend/docs/backend-api-OAD.yaml"** (Open Api Documentation format)
 
 ## FRONTEND
 

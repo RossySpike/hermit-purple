@@ -5,19 +5,23 @@
 #include "../includes/http-sanitize.h" // for __http_sanitize_key_value_t struct, validator functions.
 #include "../includes/server-defines.h" // for  BUFFER, PORT, BACKLOG, macros; http_methods_t enum.
 #include "../includes/server-routes.h"
+#include "logger.h"
+#include "server-machine.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h> // for open() function
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
+
 #include <stdio.h>
 #include <stdlib.h> // for exit() function.
 #include <strings.h>
-#include <sys/socket.h>
 #include <sys/socket.h> // for socket() function.
 #include <sys/stat.h>   // for fstat() function
-#include <sys/types.h>  // for types.
-#include <time.h>
+#include <sys/time.h>
+#include <sys/types.h> // for types.
 #include <unistd.h>
 ssize_t seek_separator(const char *params) {
   for (size_t i = 0; params[i] != '\0'; i++) {
@@ -229,6 +233,9 @@ endpoint_return server_job(void *args) {
 
     // Frist case:
     case PROCESSING_REQUEST_LINE: {
+#if LOG_LEVEL == LOG_HIGH
+      logger_log(read_buffer);
+#endif
       size_t i = 1;
       get_method(read_buffer, &i);
       ssize_t route_index = check_url(read_buffer);
@@ -490,6 +497,8 @@ endpoint_return server_job(void *args) {
         if (cursor.curr == 0 &&
             (get_http_method(get_route_index(local_machine)) == HTTP_POST ||
              get_http_method(get_route_index(local_machine)) == HTTP_PUT)) {
+          bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                      "PUT and POST methods require a body");
           break;
         } else {
 
@@ -527,9 +536,15 @@ endpoint_return server_job(void *args) {
     default:
       unreachable();
     }
+    if (get_state(local_machine) == ENDING) {
+
+      break;
+    }
     if (get_state(local_machine) != WORKING) {
 
       bzero(read_buffer, BUFFER);
+    } else {
+      break;
     }
     bzero(send_buffer, BUFFER);
   }

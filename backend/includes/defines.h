@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
-#include <string.h>
 #include <unistd.h>
 #define fperror                                                                \
   fprintf(stderr, "DEBUG: %s. errno: %d, %s\n", __func__, errno,               \

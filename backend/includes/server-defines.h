@@ -1,10 +1,7 @@
 #ifndef SERVER_DEFINES_H
 #define SERVER_DEFINES_H
-#include "defines.h"
-#include "http-sanitize.h"
 #include <regex.h>
 #include <stdbool.h>
-#include <string.h>
 #include <unistd.h> // for close() function
 
 // TODO: add options method to endpoints in order to do that, ask for the
@@ -40,5 +37,5 @@ typedef enum {
   SOMETHING_WENT_WRONG
 } endpoint_return;
 typedef enum CONTENT_TYPE { TEXT_PLAIN, CURSOR_BINARY_FORMAT } CONTENT_TYPE;
-extern const char *content_type_value;
+extern const char *const content_type_value;
 #endif // !#ifndef SERVER_DEFINES_H

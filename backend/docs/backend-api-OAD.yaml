@@ -1,0 +1,160 @@
+# https://learn.openapis.org/specification/paths.html
+openapi: 3.2
+info:
+  title: Hermit Purlple
+  description: |
+    This API allows you to upload HEIC, PNG and JPG images, then retrieve them in a compressed format such as webp or jpg or in its original format.
+    It also allows you to receive a batch of stored images in a custom binary format.
+  version: 1.0.0
+paths:
+  /api/image:
+    post:
+      summary: Upload image
+      description: Stores the image provided in the body and also converts them into jpg and webp
+
+      responses:
+        "201":
+          description: Image uploaded successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "400":
+          description: Possible causes are no `Content-Length`, `Content-Length` its not a number, `Content-Length` is 0, image magic bytes arent recognized
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "500":
+          description: Possible causes couldnt generate a valid filename for the image, couldnt create image file, malloc failed, mismatch with readed bytes and expected bytes from image, lseek failed, couldnt create vips object
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+    get:
+      description: Get an image with desired format
+      parameters:
+        - name: variant
+          in: query
+          required: true
+          description: Sets the desired format
+          schema:
+            type: string
+            enum:
+              - thumbnail
+              - compressed
+              - original
+        - name: id
+          in: query
+          required: true
+          description: The id of the desired image
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The image file
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "404":
+          description: Theres no images associated with provided `id`
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "400":
+          description: The `variant` provided is not valid
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+  /api/image/cursor/start:
+    get:
+      description: Get the index of the last element
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: integer
+
+  /api/image/cursor:
+    get:
+      summary: Get a batch of images
+      description: Get a batch of images of size (at most) `limit` starting from `current`
+      parameters:
+        - name: current
+          in: query
+          required: true
+          description: The start position of the cursor
+          schema:
+            type: integer
+            minimum: 1
+            maximun: Whatever `/api/image/cursor/start` returns
+        - name: id
+          in: limit
+          required: true
+          description: The maximun size of images per batch
+          schema:
+            type: integer
+            minimum: 1
+            maximun: Whatever `/api/image/cursor/start` returns
+      responses:
+        "200":
+          description: The binary format is 2 bytes for the index of the image (relative to limit), 8 bytes for the image id, 8 bytes for the size of the image, the rest is the actual image data, and this repeats until the batch is filled
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "400":
+          description: Invalid parameters
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer
+        "500":
+          description: Memory related
+          content:
+            text/plain:
+              schema:
+                type: string
+          headers:
+            Content-Length:
+              schema:
+                type: integer

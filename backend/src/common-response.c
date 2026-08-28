@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 int bad_request(int client_fd, unsigned long long buffer, const char *headers,
                 const char *body) {
   if (client_fd <= STDERR_FILENO)

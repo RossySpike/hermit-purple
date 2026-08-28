@@ -1,5 +1,5 @@
 #include "../includes/defines.h"
-#include <stdio.h>
+#include <string.h>
 
 /**
  * TODO: documentar

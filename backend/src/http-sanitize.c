@@ -1,7 +1,8 @@
 #include "../includes/http-sanitize.h"
-#include "../includes/defines.h"
-#include <stdio.h>
+#include <stddef.h>
+#include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 int check_regex_with_regex(const char *haystack, const regex_t *regex) {
   int found = 0;
