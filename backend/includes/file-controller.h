@@ -2,14 +2,15 @@
 #define FILE_CONTROLLER_H
 #include "./list.h"
 #include "files.h"
+#include <stddef.h>
 #include <stdint.h>
 typedef struct {
-  bool ready;
   list_t images;
+  bool ready;
 } file_controller;
 typedef struct {
-  size_t size;
   uint64_t *batch;
+  size_t size;
 } batch_t;
 
 uint64_t file_controller_get_length(void);
@@ -18,6 +19,5 @@ uint64_t file_controller_get_next_index();
 void file_controller_init();
 void file_controller_record_file(uint64_t id);
 batch_t file_controller_get_batch(uint64_t start_id, size_t size);
-file file_controller_open_image_by_idx(const char *const idx,
-                                       const char *const path);
+file file_controller_open_image_by_idx(const char *idx, const char *path);
 #endif // FILE_CONTROLLER_H

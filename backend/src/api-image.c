@@ -46,31 +46,31 @@ const char *file_extension(SUPPORTED_FILETYPE ft) {
 
 // This will be sent to the client when getting /api/image/cursor
 typedef struct [[gnu::packed]] img_metadata {
-  unsigned short idx;
-  unsigned long long img_id;
-  unsigned long long img_size;
+  uint16_t idx;
+  uint64_t img_id;
+  uint64_t img_size;
 } img_metadata; // 18 bytes (linux x86-64)
 struct post_api_image {
   int fd;
-  unsigned long long content_length_val; // Valor original, NO modificar
-  unsigned long long bytes_received; // ← NUEVO: llevar cuenta de lo recibido
+  uint64_t content_length_val; // Valor original, NO modificar
+  uint64_t bytes_received;     // ← NUEVO: llevar cuenta de lo recibido
   ssize_t n;
   char *filename;
   SUPPORTED_FILETYPE ft;
-  unsigned long long my_idx;
+  uint64_t my_idx;
   bool headers_written; // ← NUEVO: para saber si ya escribiste headers
 };
 struct get_api_image_cursor {
   file *files;
   img_metadata *metadata;
-  unsigned long long total_size;
-  unsigned short lim;
+  uint64_t total_size;
+  uint16_t lim;
 
   batch_t files_ids;
   bool headers_written;
-  unsigned short idx_metadata_written;
+  uint16_t idx_metadata_written;
   off_t metadata_off;
-  unsigned short idx_img_written;
+  uint16_t idx_img_written;
   off_t img_off;
 };
 int free_wrapper(void *ptr) {
@@ -95,7 +95,7 @@ int free_wrapper(void *ptr) {
 }
 int free_get_api_image_cursor_ctx(void *p) {
   struct get_api_image_cursor *ctx = (struct get_api_image_cursor *)p;
-  for (unsigned short i = 0; i < ctx->files_ids.size; i++) {
+  for (uint16_t i = 0; i < ctx->files_ids.size; i++) {
 
     if (ctx->files[i].fd > 0) {
       close(ctx->files[i].fd);
@@ -179,8 +179,8 @@ endpoint_return api_jump_table(stream_cursor *cursor, server_machine *machine,
     unreachable();
   }
 }
-extern unsigned long long get_idx();
-extern unsigned long long get_next_idx();
+extern uint64_t get_idx();
+extern uint64_t get_next_idx();
 /*
  * assumes stream is big enough
  * */
@@ -353,7 +353,7 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
       value_start++;
     }
 
-    unsigned long long content_length_val =
+    uint64_t content_length_val =
         strtoull(content_length + value_start, nullptr, 10);
     if (content_length_val == 0) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
@@ -371,11 +371,11 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
       return FINISHED;
     }
 
-    unsigned long long my_idx = get_next_idx();
+    uint64_t my_idx = get_next_idx();
     int filename_res = snprintf(filename, BUFFER, "%s%llu.%s", IMG_ORIGINAL_DIR,
                                 my_idx, file_extension(ft));
 
-    if (filename_res < 0 || (unsigned long long)filename_res >= BUFFER) {
+    if (filename_res < 0 || (uint64_t)filename_res >= BUFFER) {
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "254");
       return FINISHED;
@@ -582,7 +582,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
   if (machine->server_ctx->endpoint_ctx == nullptr) {
     const char *current = get_param(machine, "current");
     assert(current != nullptr);
-    unsigned long long curr = strtoull(current, nullptr, 10);
+    uint64_t curr = strtoull(current, nullptr, 10);
     if (curr == 0) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid current parameter");
@@ -591,10 +591,10 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     const char *limit = get_param(machine, "limit");
     assert(limit != nullptr);
 #warning "This is a no no"
-    unsigned long long lim_tmp = strtoull(limit, nullptr, 10);
-    unsigned short lim = (unsigned short)lim_tmp;
+    uint64_t lim_tmp = strtoull(limit, nullptr, 10);
+    uint16_t lim = (uint16_t)lim_tmp;
 
-    if (lim == 0 || curr < (unsigned long long)(lim)) {
+    if (lim == 0 || curr < (uint64_t)(lim)) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid limit parameter");
       return FINISHED;
@@ -612,11 +612,11 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
       return FINISHED;
     }
 
-    unsigned short actual_lim = lim;
+    uint16_t actual_lim = lim;
     batch_t files_ids = file_controller_get_batch(curr, actual_lim);
     open_files_to_arr(IMG_THUMBNAIL_DIR, files, files_ids.batch,
                       files_ids.size);
-    /* unsigned long long *files_ids = */
+    /* uint64_t *files_ids = */
     /*     open_files_to_arr(IMG_THUMBNAIL_DIR, files, &actual_lim, curr); */
 
     if (files_ids.batch == nullptr || files_ids.size == 0) {
@@ -642,8 +642,8 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
       return FINISHED;
     }
 
-    unsigned long long total_size = 0;
-    for (unsigned short i = 0; i < actual_lim; i++) {
+    uint64_t total_size = 0;
+    for (uint16_t i = 0; i < actual_lim; i++) {
       total_size += files[i].size;
     }
     total_size += sizeof(img_metadata) * actual_lim;
@@ -696,7 +696,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     ctx->headers_written = true;
   }
 
-  for (unsigned short i = ctx->idx_img_written; i < ctx->lim; i++) {
+  for (uint16_t i = ctx->idx_img_written; i < ctx->lim; i++) {
 
     if (ctx->idx_metadata_written == i) {
       ctx->metadata[i] = (img_metadata){.idx = i,

@@ -1,5 +1,6 @@
 #ifndef COMMON_RESPONSE_H
 #define COMMON_RESPONSE_H
+#include <stdint.h>
 
 static const char *const cors_headers =
     "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: "
@@ -9,14 +10,14 @@ static const char *const cors_headers =
                    // 86400
     ;
 
-int bad_request(int client_fd, unsigned long long buffer, const char *headers,
+int bad_request(int client_fd, uint64_t buffer, const char *headers,
                 const char *body);
-int internal_server_error(int client_fd, unsigned long long buffer,
-                          const char *headers, const char *body);
+int internal_server_error(int client_fd, uint64_t buffer, const char *headers,
+                          const char *body);
 
-int not_found(int client_fd, unsigned long long buffer, const char *headers,
+int not_found(int client_fd, uint64_t buffer, const char *headers,
               const char *body);
-int created(int client_fd, unsigned long long buffer, const char *headers,
+int created(int client_fd, uint64_t buffer, const char *headers,
             const char *body);
 
 #endif // COMMON_RESPONSE_H

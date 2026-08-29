@@ -2,6 +2,7 @@
 #include "../includes/defines.h" // for fperror
 #include "logger.h"
 #include <inttypes.h>
+#include <stdint.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -52,10 +53,10 @@ int attempt_create_dir(const char *path, mode_t mode) {
   return 0;
 }
 
-unsigned long long get_biggest_index(const char *path) {
+uint64_t get_biggest_index(const char *path) {
   DIR *dir = opendir(path);
   struct dirent *entry;
-  unsigned long long max = 0, num = 0;
+  uint64_t max = 0, num = 0;
   /* char *dot, nombre_sin_ext[256]; */
 
   assert(dir);
@@ -108,9 +109,8 @@ file open_img_at(const char *id, const char *path) {
   return f; // not found.
 }
 #warning "I should handle file not found case"
-unsigned long long *open_files_to_arr(const char *path, file *const out,
-                                      uint64_t *files_arr,
-                                      size_t files_arr_size) {
+uint64_t *open_files_to_arr(const char *path, file *const out,
+                            uint64_t *files_arr, size_t files_arr_size) {
 
 #if LOG_LEVEL == LOG_HIGH
   logger_log("open_files_to_arr: arr_size: %lu\n", files_arr_size);
@@ -129,5 +129,5 @@ unsigned long long *open_files_to_arr(const char *path, file *const out,
     open_file(&out[i], b, O_RDONLY);
   }
 
-  return (unsigned long long *)files_arr;
+  return (uint64_t *)files_arr;
 }

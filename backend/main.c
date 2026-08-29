@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <sys/epoll.h>
@@ -88,11 +89,11 @@ void server_machine_reset(server_machine *machine) {
   machine->route_idx = 0;
 }
 
-unsigned long long current = 0;
+uint64_t current = 0;
 
-unsigned long long get_next_idx() { return file_controller_get_next_index(); }
+uint64_t get_next_idx() { return file_controller_get_next_index(); }
 
-unsigned long long get_idx() { return file_controller_get_length(); }
+uint64_t get_idx() { return file_controller_get_length(); }
 
 int main(int argc, char *argv[]) {
 

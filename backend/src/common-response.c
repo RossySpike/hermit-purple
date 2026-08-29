@@ -1,14 +1,15 @@
 #include "../includes/common-response.h"
 #include "../includes/server-defines.h"
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-int bad_request(int client_fd, unsigned long long buffer, const char *headers,
+int bad_request(int client_fd, uint64_t buffer, const char *headers,
                 const char *body) {
   if (client_fd <= STDERR_FILENO)
     return -1;
-  unsigned long long content_length = 0;
+  uint64_t content_length = 0;
   if (body != nullptr)
     content_length = strlen(body);
   else
@@ -24,7 +25,7 @@ int bad_request(int client_fd, unsigned long long buffer, const char *headers,
       body != nullptr ? body : "Bad Request");
   if (msg_res > 0) {
 
-    assert((unsigned long long)msg_res < buffer);
+    assert((uint64_t)msg_res < buffer);
     assert(write(client_fd, b, buffer));
   } else {
   }
@@ -33,11 +34,11 @@ int bad_request(int client_fd, unsigned long long buffer, const char *headers,
   return 0;
 }
 
-int internal_server_error(int client_fd, unsigned long long buffer,
-                          const char *headers, const char *body) {
+int internal_server_error(int client_fd, uint64_t buffer, const char *headers,
+                          const char *body) {
   if (client_fd <= STDERR_FILENO)
     return -1;
-  unsigned long long content_length = 0;
+  uint64_t content_length = 0;
   if (body != nullptr)
     content_length = strlen(body);
   else
@@ -54,7 +55,7 @@ int internal_server_error(int client_fd, unsigned long long buffer,
                          body != nullptr ? body : "Something went wrong");
   if (msg_res > 0) {
 
-    assert((unsigned long long)msg_res < buffer);
+    assert((uint64_t)msg_res < buffer);
     assert(write(client_fd, b, buffer));
   } else {
   }
@@ -62,11 +63,11 @@ int internal_server_error(int client_fd, unsigned long long buffer,
   b = nullptr;
   return 0;
 }
-int not_found(int client_fd, unsigned long long buffer, const char *headers,
+int not_found(int client_fd, uint64_t buffer, const char *headers,
               const char *body) {
   if (client_fd <= STDERR_FILENO)
     return -1;
-  unsigned long long content_length = 0;
+  uint64_t content_length = 0;
   if (body != nullptr)
     content_length = strlen(body);
   else
@@ -82,7 +83,7 @@ int not_found(int client_fd, unsigned long long buffer, const char *headers,
       headers == nullptr ? "" : headers, body != nullptr ? body : "Not Found");
   if (msg_res > 0) {
 
-    assert((unsigned long long)msg_res < buffer);
+    assert((uint64_t)msg_res < buffer);
     assert(write(client_fd, b, buffer));
   } else {
   }
@@ -90,11 +91,11 @@ int not_found(int client_fd, unsigned long long buffer, const char *headers,
   b = nullptr;
   return 0;
 }
-int created(int client_fd, unsigned long long buffer, const char *headers,
+int created(int client_fd, uint64_t buffer, const char *headers,
             const char *body) {
   if (client_fd <= STDERR_FILENO)
     return -1;
-  unsigned long long content_length = 0;
+  uint64_t content_length = 0;
   if (body != nullptr)
     content_length = strlen(body);
   else
@@ -109,7 +110,7 @@ int created(int client_fd, unsigned long long buffer, const char *headers,
       headers == nullptr ? "" : headers, body != nullptr ? body : "Created");
   if (msg_res > 0) {
 
-    assert((unsigned long long)msg_res < buffer);
+    assert((uint64_t)msg_res < buffer);
     assert(write(client_fd, b, buffer));
   } else {
   }

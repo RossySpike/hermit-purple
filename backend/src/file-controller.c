@@ -93,7 +93,7 @@ bool binary_search(uint64_t id, size_t *found_at) {
                        sizeof(void *), sort_asc);
 
 #if LOG_LEVEL == LOG_HIGH
-  logger_log("id: %llu, found_at: %lu\n", (unsigned long long)id, *found_at);
+  logger_log("id: %llu, found_at: %" PRIu64 "\n", (uint64_t)id, *found_at);
 #endif
   if (res != nullptr) {
     if (found_at) {
@@ -140,8 +140,8 @@ batch_t file_controller_get_batch(uint64_t start, size_t size) {
   for (size_t batch_idx = 0; batch_idx < batch.size; batch_idx++) {
     size_t i = start - 1 - batch_idx;
 #if LOG_LEVEL == LOG_HIGH
-    logger_log("idx: %lu, batch_idx: %lu, at: %llu\n", i, batch_idx,
-               (unsigned long long)this_at(i));
+    logger_log("idx: %lu, batch_idx: %lu, at: %" PRIu64 "\n", i, batch_idx,
+               this_at(i));
 #endif
     arr[batch_idx] = this_at(i);
   }
