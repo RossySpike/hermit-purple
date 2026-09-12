@@ -84,6 +84,8 @@ int free_wrapper(void *ptr) {
   }
 
   if (p->fd > 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s: closing `p->fd` (%d)\n", __func__,
+               p->fd);
     close(p->fd);
 
     p->fd = -1;
@@ -98,6 +100,8 @@ int free_get_api_image_cursor_ctx(void *p) {
   for (uint16_t i = 0; i < ctx->files_ids.size; i++) {
 
     if (ctx->files[i].fd > 0) {
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s: closing `ctx->files[i].fd` (%d)\n",
+                 __func__, ctx->files[i].fd);
       close(ctx->files[i].fd);
       ctx->files[i].fd = -1;
     }
@@ -110,9 +114,7 @@ int free_get_api_image_cursor_ctx(void *p) {
   ctx->metadata = nullptr;
   free(p);
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("limpiado context de api_image_cursor\n");
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "limpiado context de api_image_cursor\n");
   p = nullptr;
   return 0;
 }
@@ -136,44 +138,28 @@ endpoint_return api_jump_table(stream_cursor *cursor, server_machine *machine,
   size_t id = get_route_index(machine);
   switch (id) {
   case 0:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("get_api_image:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "get_api_image:\n");
     return get_api_image(machine, read_buffer);
   case 1:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("get_api_image_cursor:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "get_api_image_cursor:\n");
     return get_api_image_cursor(machine);
   case 2:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("post_api_image:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "post_api_image:\n");
     return post_api_image(cursor, machine, read_buffer);
   case 3:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("get_api_image_cursor_start:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "get_api_image_cursor_start:\n");
     return get_api_image_cursor_start(machine);
   case 4:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("options_api_image_cursor_start:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "options_api_image_cursor_start:\n");
     return options_api_image_cursor_start(machine);
   case 5:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("options_api_image_cursor:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "options_api_image_cursor:\n");
     return options_api_image_cursor(machine);
   case 6:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("options_api_image:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "options_api_image:\n");
     return options_api_image(machine);
   case 7:
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("options_post_api_image:\n");
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "options_post_api_image:\n");
     return options_post_api_image(machine);
   default:
     unreachable();
@@ -228,6 +214,8 @@ int free_get_api_image_ctx(void *void_ctx) {
   struct get_api_image *ctx = (struct get_api_image *)void_ctx;
   int close_res = 0;
   if (ctx->f.fd > 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s: closing `ctx->f.fd` (%d)\n",
+               __func__, ctx->f.fd);
     close_res = close(ctx->f.fd);
   }
   if (ctx->f.name != nullptr) {
@@ -248,7 +236,7 @@ endpoint_return get_api_image(server_machine *machine, char *read_buffer) {
     assert(img_id != nullptr);
     file f = {0};
 
-    struct get_api_image *ctx = malloc(sizeof(struct get_api_image));
+    struct get_api_image *ctx = calloc(1, sizeof(struct get_api_image));
     machine->server_ctx->free_endpoint_ctx = free_get_api_image_ctx;
     machine->server_ctx->endpoint_ctx = ctx;
     // offset asigned later...
@@ -360,6 +348,11 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
                   "Content-Length cannot be 0");
       return FINISHED;
     }
+    if (content_length_val > MAX_BYTES_SIZE) {
+      bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                  "Content-Length is too large");
+      return FINISHED;
+    }
 
     size_t body_offset = cursor->offset;
     size_t bytes_en_buffer = machine->server_ctx->n - body_offset;
@@ -391,15 +384,19 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
 
     ssize_t initial_w = write(fd, read_buffer + body_offset, bytes_en_buffer);
     if (initial_w < 0) {
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd` (%d)\n", __func__,
+                 __LINE__, fd);
       close(fd);
       fd = -1;
       return SOMETHING_WENT_WRONG;
     }
 
-    ctx = malloc(sizeof(struct post_api_image));
+    ctx = calloc(1, sizeof(struct post_api_image));
     if (ctx == nullptr) {
       internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
                             "Out of memory");
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd` (%d)\n", __func__,
+                 __LINE__, fd);
       close(fd);
       fd = -1;
       return SOMETHING_WENT_WRONG;
@@ -462,7 +459,8 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   }
 
   if (ctx->bytes_received != ctx->content_length_val) {
-    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "331");
+    internal_server_error(get_client_fd(local_machine), BUFFER, nullptr,
+                          "Bytes received dont match Content-Length");
     return SOMETHING_WENT_WRONG;
   }
 
@@ -524,12 +522,16 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   }
 
   if (write(fd_salida, buffer_salida, tam_salida) < 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd_salida` (%d)\n",
+               __func__, __LINE__, fd_salida);
     close(fd_salida);
     g_free(buffer_salida);
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "399");
     return SOMETHING_WENT_WRONG;
   }
 
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd_salida` (%d)\n",
+             __func__, __LINE__, fd_salida);
   close(fd_salida);
   g_free(buffer_salida);
 
@@ -561,12 +563,16 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
   }
 
   if (write(fd_salida, buffer_salida, tam_salida) < 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd_salida` (%d)\n",
+               __func__, __LINE__, fd_salida);
     close(fd_salida);
     g_free(buffer_salida);
     internal_server_error(get_client_fd(local_machine), BUFFER, nullptr, "445");
     return SOMETHING_WENT_WRONG;
   }
 
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `fd_salida` (%d)\n",
+             __func__, __LINE__, fd_salida);
   close(fd_salida);
   g_free(buffer_salida);
 
@@ -605,7 +611,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
       return FINISHED;
     }
 
-    file *files = malloc(sizeof(file) * lim);
+    file *files = calloc(1, sizeof(file) * lim);
     if (!files) {
       internal_server_error(get_client_fd(machine), BUFFER, nullptr,
                             "Memory allocation failed");
@@ -633,7 +639,7 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
       return FINISHED;
     }
 
-    img_metadata *metadata = malloc(sizeof(img_metadata) * files_ids.size);
+    img_metadata *metadata = calloc(1, sizeof(img_metadata) * files_ids.size);
     if (!metadata) {
       free(files_ids.batch);
       free(files);

@@ -2,6 +2,8 @@
 #define SERVER_MACHINE_H
 #include "../includes/list.h"
 #include "server.h"
+#include "server-timer.h"
+#include <stddef.h>
 typedef enum server_states {
   WAITING,
   PROCESSING_REQUEST_LINE,
@@ -14,6 +16,7 @@ typedef struct server_machine {
   server_states prev_state;
   int client_fd;
   size_t route_idx;
+  timer timer;
   server_ctx *server_ctx;
   list_t headers;
   list_t params;
@@ -34,4 +37,9 @@ bool add_header(server_machine *machine, const char *header);
 bool add_params(server_machine *machine, const char *uri);
 const char *get_param(const server_machine *machine, const char *param_name);
 
+void server_machine_reset(server_machine *machine);
+bool server_machine_set_endpoint_ctx(server_machine *machine, server_ctx *ctx);
+bool server_machine_set_free_endpoint_ctx(server_machine *machine,
+                                          int free_endpoint_ctx(void *));
+bool server_machine_free_endpont_ctx(server_machine *machine);
 #endif // SERVER_MACHINE_H

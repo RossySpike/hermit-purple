@@ -4,7 +4,7 @@
 /**
  * TODO: documentar
  */
-int find_carriage(stream_cursor *cursor, const char *stream) {
+carriage_status find_carriage(stream_cursor *cursor, const char *stream) {
 
   size_t local_cur = cursor->curr;
 

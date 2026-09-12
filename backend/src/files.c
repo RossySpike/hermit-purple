@@ -16,9 +16,7 @@
 #include <sys/types.h>
 #include <unistd.h> // for close() function
 int open_file(file *f, const char *r_path, int flag) {
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("%s: r_path: %s\n", __func__, r_path);
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s: r_path: %s\n", __func__, r_path);
   f->fd = open(r_path, flag);
   if (f->fd < 0) {
     fperror;
@@ -27,6 +25,8 @@ int open_file(file *f, const char *r_path, int flag) {
   struct stat fs;
   if (fstat(f->fd, &fs) == -1) {
     fperror;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s: closing `f->fd` (%d)\n", __func__,
+               f->fd);
     close(f->fd);
     f->fd = -1;
     return -1;
@@ -36,6 +36,8 @@ int open_file(file *f, const char *r_path, int flag) {
 }
 
 int close_file(file *f) {
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s: closing `f->fd` (%d)\n", __func__,
+             f->fd);
   if (close(f->fd) < 0) {
     fperror;
     return -1;
@@ -112,9 +114,8 @@ file open_img_at(const char *id, const char *path) {
 uint64_t *open_files_to_arr(const char *path, file *const out,
                             uint64_t *files_arr, size_t files_arr_size) {
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("open_files_to_arr: arr_size: %lu\n", files_arr_size);
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "open_files_to_arr: arr_size: %lu\n",
+             files_arr_size);
   char curr_filename[21];
 
   for (size_t i = 0; i < files_arr_size; i++) {
@@ -123,9 +124,7 @@ uint64_t *open_files_to_arr(const char *path, file *const out,
              files_arr[i]);
     char b[BUFFER] = {0};
     snprintf(b, sizeof(b), "%s%s", path, curr_filename);
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("%s\n", b);
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s\n", b);
     open_file(&out[i], b, O_RDONLY);
   }
 

@@ -39,29 +39,24 @@ bool logger_init() {
     log_errno_to_stderr("UNABLE TO TURN STREAM INTO LINE BUFFERED");
     return false;
   }
-  switch (LOG_LEVEL) {
-  case LOG_MEDIUM:
-  case LOG_HIGH: {
 
-    logger_log("[LOG] file created at: %s\n", filename);
-    break;
-  }
-  default:
-    break;
-  }
+  logger_log(LOG_HIGH | LOG_MEDIUM, "[LOG] file created at: %s\n", filename);
 
   return true;
 }
 
-void logger_log(const char *fmt, ...) {
-  assert(is_set);
+void logger_log(log_level_t level, const char *fmt, ...) {
+  if (level & (unsigned)LOG_LEVEL) {
 
-  va_list args;
-  va_start(args, fmt);
-  if (vfprintf(logger, fmt, args) < 0) {
-    log_errno_to_stderr("[LOG] UNABLE TO PRINT\n");
+    assert(is_set);
+
+    va_list args;
+    va_start(args, fmt);
+    if (vfprintf(logger, fmt, args) < 0) {
+      log_errno_to_stderr("[LOG] UNABLE TO PRINT\n");
+    }
+    va_end(args);
   }
-  va_end(args);
 }
 
 bool logger_destroy() {

@@ -26,6 +26,12 @@ typedef struct {
 // has an index to the current character of the stream and a buffer to
 // store old values from the stream that need to be used
 
-int find_carriage(stream_cursor *cursor, const char *stream);
+typedef enum {
+  CARRIAGE_NOT_FOUND_MEM_NOT_EMPTY = -1,
+  CARRIAGE_FOUND = 0,
+  CARRIAGE_NOT_FOUND_MEM_PUSHED = 1,
+  CARRIAGE_DOUBLE = 2,
+} carriage_status;
+carriage_status find_carriage(stream_cursor *cursor, const char *stream);
 
 #endif // DEFINES_H

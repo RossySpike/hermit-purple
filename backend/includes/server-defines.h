@@ -2,6 +2,7 @@
 #define SERVER_DEFINES_H
 #include <regex.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <unistd.h> // for close() function
 
 // TODO: add options method to endpoints in order to do that, ask for the
@@ -10,9 +11,15 @@
 
 #define PORT 1600
 
-typedef enum { LOG_DISABLED, LOG_BASIC, LOG_MEDIUM, LOG_HIGH } log_level;
+typedef enum {
+  LOG_DISABLED = 0,
+  LOG_BASIC = (1 << 0),
+  LOG_MEDIUM = (1 << 1),
+  LOG_HIGH = (1 << 2)
+} log_level;
+#define log_level_t size_t
 
-#define LOG_LEVEL LOG_HIGH
+#define LOG_LEVEL LOG_BASIC
 // #define LOG_FILE
 
 #define BACKLOG 1
@@ -22,6 +29,7 @@ typedef enum { LOG_DISABLED, LOG_BASIC, LOG_MEDIUM, LOG_HIGH } log_level;
 #define IMG_ORIGINAL_DIR "/tmp/original/"
 #define IMG_THUMBNAIL_DIR "/tmp/thumbnail/"
 #define IMG_CACHE_DIR "/tmp/cache/"
+#define MAX_BYTES_SIZE 134217700 // 1GiB
 
 enum http_methods_t {
   HTTP_GET,

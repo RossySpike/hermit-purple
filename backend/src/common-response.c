@@ -119,3 +119,32 @@ int created(int client_fd, uint64_t buffer, const char *headers,
   b = nullptr;
   return 0;
 }
+int request_timeout(int client_fd, uint64_t buffer, const char *headers,
+                    const char *body) {
+
+  if (client_fd <= STDERR_FILENO)
+    return -1;
+  uint64_t content_length = 0;
+  if (body != nullptr)
+    content_length = strlen(body);
+  else
+    content_length = strlen("Request Timeout");
+
+  char *b = (char *)calloc(buffer, sizeof(char));
+  assert(b);
+
+  int msg_res = snprintf(
+      b, buffer,
+      "HTTP/1.1 408 Request Timeout\r\n%s: %s\r\n%s: %llu\r\n%s%s\r\n\r\n%s",
+      "Server", HOST_NAME, "Content-Length", content_length, cors_headers,
+      headers == nullptr ? "" : headers, body != nullptr ? body : "Not Found");
+  if (msg_res > 0) {
+
+    assert((uint64_t)msg_res < buffer);
+    assert(write(client_fd, b, buffer));
+  } else {
+  }
+  free(b);
+  b = nullptr;
+  return 0;
+}

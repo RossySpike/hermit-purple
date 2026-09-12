@@ -92,7 +92,7 @@ else
   exit 1
 fi
 #
-# Missing Content-Length header
+# TEST: Missing Content-Length header
 #
 log "TEST: uploading an unvalid .jpg withouth Content-Length. Expected results: response: 400 body: Missing Content-Length header"
 TEST=$(send_request_no_content_length "$THIS_DIR/bad-no-contents.jpg" "$THIS_DIR/bad-no-contents.jpg.400.created.header.log")
@@ -136,7 +136,7 @@ else
   exit 1
 fi
 #
-# Content-Length: 0 but does have body
+# TEST:  Content-Length: 0 but does have body
 #
 log "TEST: uploading an valid .jpg with Content-Length: 0. Expected results: response: 400 body: Missing Content-Length header"
 TEST=$(send_request_content_length_zero_with_body "$THIS_DIR/good.jpg" "$THIS_DIR/bad-zero-content-length.jpg.400.created.header.log")
@@ -180,7 +180,7 @@ else
   exit 1
 fi
 #
-# Content-Length: 0 but doesnt have body
+# TEST: Content-Length: 0 but doesnt have body
 #
 log "TEST: uploading an unvalid .jpg with Content-Length: 0. Expected results: response: 400 body: Missing Content-Length header"
 TEST=$(send_request_content_length_zero_with_body "$THIS_DIR/bad-no-contents.jpg" "$THIS_DIR/bad-zero-content-length-no-body.jpg.400.created.header.log")
@@ -224,7 +224,7 @@ else
   exit 1
 fi
 #
-# Valid request but unvalid (non matching magic numbers)
+# TEST: Valid request but unvalid (non matching magic numbers)
 #
 log "TEST: uploading an unvalid .jpg with Content-Length. Expected results: response: 201 body: Created"
 TEST=$(send_request "$THIS_DIR/bad-unvalid.jpg" "$THIS_DIR/bad-unvalid.jpg.201.created.header.log")
@@ -268,6 +268,120 @@ else
   exit 1
 fi
 
+#
+# TEST: Valid file that exceeds supported file size
+#
+MAX_FILE_SIZE=134217701
+send_request_over_supported_file_size() {
+  log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
+  log "REQUEST DATA: $2"
+  echo "curl -v -s -D \"$2\" -X POST -H \"Expect: \" -H \"Content-Length: $(("$MAX_FILE_SIZE" + 500))\" --data-binary @\"$1\" \"http://$HOST/api/image\"" >&2
+  RESULT=$(curl -v -s -D "$2" -X POST -H "Expect: " -H "Content-Length: $(("$MAX_FILE_SIZE" + 500))" --data-binary @"$1" "http://$HOST/api/image" 2>"/tmp/hermit-purple-test-helper.log")
+  log "RESULT:=$RESULT"
+  cat /tmp/hermit-purple-test-helper.log >>"$THIS_DIR/$2"
+  echo "$RESULT"
+
+}
+
+log "TEST: uploading a valid .jpg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
+TEST=$(send_request_over_supported_file_size "$THIS_DIR/good.jpg" "good.jpg.408.timeout.header.log")
+
+if [ "$TEST" = "Content-Length is too large" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .heic with a greater Content-Length. Expected results: response: 408 body: Content-Length is too large"
+TEST=$(send_request_over_supported_file_size "$THIS_DIR/good.heic" "good.heic.408.timeout.header.log")
+
+if [ "$TEST" = "Content-Length is too large" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+
+log "TEST: uploading a valid .png with a greater Content-Length. Expected results: response: 408 body: Content-Length is too large"
+TEST=$(send_request_over_supported_file_size "$THIS_DIR/good.png" "good.png.408.timeout.header.log")
+
+if [ "$TEST" = "Content-Length is too large" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .jpeg with a greater Content-Length. Expected results: response: 408 body: Content-Length is too large"
+TEST=$(send_request_over_supported_file_size "$THIS_DIR/good.jpeg" "good.jpeg.408.timeout.header.log")
+
+if [ "$TEST" = "Content-Length is too large" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+
+#
+# TEST: Valid file but with repeated Content-Length header
+#
+
+send_request_dup_content_length() {
+  log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
+  log "REQUEST DATA: $2"
+  echo "curl -v -s -D \"$2\" -X POST -H \"Expect: \" -H \"Content-Length: $(wc -c <"$1")\" -H \"Content-Length: 123213\" --data-binary @\"$1\" \"http://$HOST/api/image\"" >&2
+  RESULT=$(curl -v -s -D "$2" -X POST -H "Expect: " -H "Content-Length: $(wc -c <"$1")" -H "Content-Length: 123213" --data-binary @"$1" "http://$HOST/api/image" 2>"/tmp/hermit-purple-test-helper.log")
+  log "RESULT:=$RESULT"
+  cat /tmp/hermit-purple-test-helper.log >>"$2"
+  echo "$RESULT"
+
+}
+
+log "TEST: uploading a valid .jpg with duplicated Content-Length. Expected results: response: 400 body: Bad headers"
+TEST=$(send_request_dup_content_length "$THIS_DIR/good.jpg" "$THIS_DIR/good.jpg.400.created.header.log")
+
+if [ "$TEST" = "Bad headers" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .heic with duplicated Content-Length. Expected results: response: 400 body: Bad headers"
+TEST=$(send_request_dup_content_length "$THIS_DIR/good.heic" "$THIS_DIR/good.heic.400.created.header.log")
+
+if [ "$TEST" = "Bad headers" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+
+log "TEST: uploading a valid .png with duplicated Content-Length. Expected results: response: 400 body: Bad headers"
+TEST=$(send_request_dup_content_length "$THIS_DIR/good.png" "$THIS_DIR/good.png.400.created.header.log")
+
+if [ "$TEST" = "Bad headers" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .jpeg with duplicated Content-Length. Expected results: response: 400 body: Bad headers"
+TEST=$(send_request_dup_content_length "$THIS_DIR/good.jpeg" "$THIS_DIR/good.jpeg.400.created.header.log")
+
+if [ "$TEST" = "Bad headers" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+
 send_request_excess_content_length() {
   log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
   log "REQUEST DATA: $2"
@@ -278,49 +392,50 @@ send_request_excess_content_length() {
   echo "$RESULT"
 
 }
+
 #
-# Valid file but with a greater Content-Length than file bytes
+# TEST: Valid file but with a greater Content-Length than file bytes
 #
-# log "TEST: uploading a valid .jpg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
-# TEST=$(send_request_excess_content_length "$THIS_DIR/good.jpg" "good.jpg.408.timeout.header.log")
-#
-# if [ "$TEST" = "Request Timeout" ]; then
-#   echo "Test passed"
-#
-# else
-#   echo "Test failed"
-#   exit 1
-# fi
-# log "TEST: uploading a valid .heic with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
-# TEST=$(send_request_excess_content_length "$THIS_DIR/good.heic" "good.heic.408.timeout.header.log")
-#
-# if [ "$TEST" = "Request Timeout" ]; then
-#   echo "Test passed"
-#
-# else
-#   echo "Test failed"
-#   exit 1
-# fi
-#
-# log "TEST: uploading a valid .png with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
-# TEST=$(send_request_excess_content_length "$THIS_DIR/good.png" "good.png.408.timeout.header.log")
-#
-# if [ "$TEST" = "Request Timeout" ]; then
-#   echo "Test passed"
-#
-# else
-#   echo "Test failed"
-#   exit 1
-# fi
-# log "TEST: uploading a valid .jpeg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
-# TEST=$(send_request_excess_content_length "$THIS_DIR/good.jpeg" "good.jpeg.408.timeout.header.log")
-#
-# if [ "$TEST" = "Request Timeout" ]; then
-#   echo "Test passed"
-#
-# else
-#   echo "Test failed"
-#   exit 1
-# fi
+log "TEST: uploading a valid .jpg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
+TEST=$(send_request_excess_content_length "$THIS_DIR/good.jpg" "good.jpg.408.timeout.header.log")
+
+if [ "$TEST" = "Request Timeout" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .heic with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
+TEST=$(send_request_excess_content_length "$THIS_DIR/good.heic" "good.heic.408.timeout.header.log")
+
+if [ "$TEST" = "Request Timeout" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+
+log "TEST: uploading a valid .png with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
+TEST=$(send_request_excess_content_length "$THIS_DIR/good.png" "good.png.408.timeout.header.log")
+
+if [ "$TEST" = "Request Timeout" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .jpeg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
+TEST=$(send_request_excess_content_length "$THIS_DIR/good.jpeg" "good.jpeg.408.timeout.header.log")
+
+if [ "$TEST" = "Request Timeout" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
 
 exit 0

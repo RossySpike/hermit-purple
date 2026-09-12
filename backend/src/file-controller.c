@@ -33,7 +33,7 @@ int sort_asc(const void *a, const void *b) {
 uint64_t file_controller_get_length(void) { return this.images.len; }
 void file_controller_init() {
 
-  controller = malloc(sizeof(file_controller));
+  controller = calloc(1, sizeof(file_controller));
   list_new(&this.images);
 
   DIR *dir = opendir(IMG_THUMBNAIL_DIR);
@@ -54,30 +54,26 @@ void file_controller_init() {
     char *file_name = entry->d_name;
     file_name[i] = '\0';
 
-    /* uint64_t *ptr = malloc(sizeof(uint64_t)); */
+    /* uint64_t *ptr = calloc(1,sizeof(uint64_t)); */
     /* *ptr = strtoull(file_name, nullptr, 10); */
 
     file_controller_record_file(strtoull(file_name, nullptr, 10));
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("appended: %" PRIu64 "\n", this_at(this.images.len - 1));
-#endif
+    logger_log(LOG_HIGH | LOG_MEDIUM, "appended: %" PRIu64 "\n",
+               this_at(this.images.len - 1));
   }
 
   closedir(dir);
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("len: %lu, cap: %lu\n", this.images.len, this.images.capacity);
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "len: %lu, cap: %lu\n", this.images.len,
+             this.images.capacity);
   qsort(this.images.array, this.images.len, sizeof(void *), sort_asc);
   this.ready = true;
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("files: [");
+  logger_log(LOG_HIGH | LOG_MEDIUM, "files: [");
   for (size_t i = 0; i < this.images.len; i++) {
 
-    logger_log(" %" PRIu64 " ", this_at(i));
+    logger_log(LOG_HIGH | LOG_MEDIUM, " %" PRIu64 " ", this_at(i));
   }
-  logger_log("] \n");
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "] \n");
 }
 
 void file_controller_record_file(uint64_t id) {
@@ -92,9 +88,8 @@ bool binary_search(uint64_t id, size_t *found_at) {
   void **res = bsearch(&needle, this.images.array, this.images.len,
                        sizeof(void *), sort_asc);
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("id: %llu, found_at: %" PRIu64 "\n", (uint64_t)id, *found_at);
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "id: %llu, found_at: %" PRIu64 "\n",
+             (uint64_t)id, *found_at);
   if (res != nullptr) {
     if (found_at) {
       // Pointer aritmethics
@@ -125,12 +120,12 @@ batch_t file_controller_get_batch(uint64_t start, size_t size) {
   batch_t batch = {.size = size < this.images.len ? size : this.images.len,
                    .batch = nullptr};
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("%s: size(%lu) < this.images.len (%lu) ? size (%lu) : "
+  logger_log(LOG_HIGH | LOG_MEDIUM,
+             "%s: size(%lu) < this.images.len (%lu) ? size (%lu) : "
              "this.images.len - size (%lu)\n",
              __func__, size, this.images.len, size, this.images.len);
-  logger_log("%s: batch: .size: %lu\n", __func__, batch.size);
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s: batch: .size: %lu\n", __func__,
+             batch.size);
   uint64_t *arr = calloc(batch.size, sizeof(uint64_t));
   if (!arr)
     return batch;
@@ -139,20 +134,17 @@ batch_t file_controller_get_batch(uint64_t start, size_t size) {
 
   for (size_t batch_idx = 0; batch_idx < batch.size; batch_idx++) {
     size_t i = start - 1 - batch_idx;
-#if LOG_LEVEL == LOG_HIGH
-    logger_log("idx: %lu, batch_idx: %lu, at: %" PRIu64 "\n", i, batch_idx,
+    logger_log(LOG_HIGH | LOG_MEDIUM,
+               "idx: %lu, batch_idx: %lu, at: %" PRIu64 "\n", i, batch_idx,
                this_at(i));
-#endif
     arr[batch_idx] = this_at(i);
   }
 
-#if LOG_LEVEL == LOG_HIGH
-  logger_log("batch: [");
+  logger_log(LOG_HIGH | LOG_MEDIUM, "batch: [");
   for (size_t i = 0; i < batch.size; i++) {
-    logger_log(" %" PRIu64 " ", arr[i]);
+    logger_log(LOG_HIGH | LOG_MEDIUM, " %" PRIu64 " ", arr[i]);
   }
-  logger_log("]\n");
-#endif
+  logger_log(LOG_HIGH | LOG_MEDIUM, "]\n");
 
   return batch;
 }

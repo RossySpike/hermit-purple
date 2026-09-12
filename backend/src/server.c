@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "../includes/server.h"
 #include "../includes/api-image.h"
 #include "../includes/common-response.h"
@@ -13,7 +14,9 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include <stdio.h>
 #include <stdlib.h> // for exit() function.
@@ -23,18 +26,24 @@
 #include <sys/time.h>
 #include <sys/types.h> // for types.
 #include <unistd.h>
-ssize_t seek_separator(const char *params) {
-  for (size_t i = 0; params[i] != '\0'; i++) {
-    if (params[i] == '&') {
-      return i;
-    }
+#define is_header_at_i_parsed(i) (completed_headers & ((size_t)1 << (i))) != 0
+#define header_at_i_is_parsed(i) completed_headers |= ((size_t)1 << (i))
+// NOTHING, RETURN, BREAK, CONTINUE
+#define handle_action(action)                                                  \
+  if ((action).type == CONTINUE) {                                             \
+    continue;                                                                  \
+  }                                                                            \
+  if ((action).type == BREAK) {                                                \
+    break;                                                                     \
+  }                                                                            \
+  if ((action).type == RETURN) {                                               \
+    return (action).return_status;                                             \
   }
-  return -1;
-}
 
+static ssize_t seek_separator(const char *params);
 int init_server_addr(server_addr *saddr) {
   saddr->len = sizeof(saddr->addr);
-  bzero(saddr, saddr->len);
+  memset(saddr, 0, saddr->len);
   saddr->addr.sin_family = AF_INET;
   saddr->addr.sin_port = htons(PORT);
   saddr->addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -43,33 +52,39 @@ int init_server_addr(server_addr *saddr) {
 
 int init_sock_server(server *s) {
   int optval = 1;
-  s->server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  s->server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (s->server_fd < 0) {
     fperror;
     return -1;
   }
   if (setsockopt(s->server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &optval,
                  sizeof(optval))) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `s->server_fd` (%d)\n",
+               __func__, __LINE__, s->server_fd);
     close(s->server_fd);
     fperror;
     return -1;
   }
   if (bind(s->server_fd, (struct sockaddr *)&s->addr.addr, s->addr.len) < 0) {
     fperror;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `s->server_fd` (%d)\n",
+               __func__, __LINE__, s->server_fd);
     close(s->server_fd);
     return -1;
   }
   // epoll
-  int flags = fcntl(s->server_fd, F_GETFL, 0);
+  // int flags = fcntl(s->server_fd, F_GETFL, 0);
 
-  if (!flags) {
-    return -1;
-  }
-  if (fcntl(s->server_fd, F_SETFL, flags | O_NONBLOCK) == -1)
-    return -1;
+  /* if (!flags) { */
+  /*   return -1; */
+  /* } */
+  /* if (fcntl(s->server_fd, F_SETFL, flags | O_NONBLOCK) == -1) */
+  /*   return -1; */
 
   if (listen(s->server_fd, BACKLOG) < 0) {
     fperror;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `s->server_fd` (%d)\n",
+               __func__, __LINE__, s->server_fd);
     close(s->server_fd);
     return -1;
   }
@@ -86,31 +101,35 @@ int init_server(server *s) {
   return 0;
 }
 int init_client(server *s) {
-  s->client_fd =
-      accept(s->server_fd, (struct sockaddr *)&s->addr.addr, &s->addr.len);
+  s->client_fd = accept4(s->server_fd, (struct sockaddr *)&s->addr.addr,
+                         &s->addr.len, SOCK_NONBLOCK | SOCK_CLOEXEC);
   if (s->client_fd == -1) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
       return 1;
-    } else {
-      return -1;
     }
-  }
-  int flags = fcntl(s->client_fd, F_GETFL, 0);
-
-  if (!flags) {
     return -1;
   }
-  if (fcntl(s->client_fd, F_SETFL, flags | O_NONBLOCK) == -1)
-    return -1;
+  /* int flags = fcntl(s->client_fd, F_GETFL, 0); */
+  /**/
+  /* if (!flags) { */
+  /*   return -1; */
+  /* } */
+  /* if (fcntl(s->client_fd, F_SETFL, flags | O_NONBLOCK) == -1) { */
+  /*   return -1; */
+  /* } */
 
   return 0;
 }
 int destroy_server(server *s) {
   if (s->client_fd >= 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `s->server_fd` (%d)\n",
+               __func__, __LINE__, s->server_fd);
     close(s->client_fd);
     s->client_fd = -1;
   }
   if (s->server_fd >= 0) {
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: closing `s->server_fd` (%d)\n",
+               __func__, __LINE__, s->server_fd);
     close(s->server_fd);
     s->client_fd = -1;
   }
@@ -130,7 +149,126 @@ int destroy_server(server *s) {
  * Side effects:
  * - Stores the position where the URL starts in start_url.
  */
-enum http_methods_t get_method(char *r, size_t *start_url) {
+static enum http_methods_t get_method(char *r, size_t *start_url);
+
+#define THIS_ROUTE (get_routes()[get_route_index(local_machine)])
+
+/**
+ * Finds the index of the server_routes_t with a matching uri_regex.
+ *
+ * Expects: url to be a null-terminated string.
+ *
+ * @param url The URL string to check.
+ * @return The index of the matching server_routes_t, or -1 if not found.
+ */
+static ssize_t check_url(const char *url);
+
+// TODO: Check
+
+#warning "bro I cant be this lazy lolllll"
+#define read_buffer local_machine->server_ctx->read_buffer
+#define cursor (*local_machine->server_ctx->cursor)
+#define completed_headers local_machine->server_ctx->completed_headers
+#define should_read local_machine->server_ctx->should_read
+
+typedef enum { NOTHING, RETURN, BREAK, CONTINUE } action_type_t;
+typedef struct {
+  endpoint_return return_status;
+  action_type_t type;
+} action_t;
+
+static action_t process_request_line(server_machine *local_machine,
+                                     char *send_buffer);
+static action_t process_headers(server_machine *local_machine,
+                                char *send_buffer);
+
+static action_t process_work(server_machine *local_machine, char *send_buffer);
+endpoint_return server_job(void *args) {
+  server_machine *local_machine = (server_machine *)args;
+
+  if (get_state(local_machine) == WAITING) {
+    set_state(local_machine, PROCESSING_REQUEST_LINE);
+  }
+  char send_buffer[BUFFER] = {0};
+  local_machine->server_ctx->n = 0; // number of bytes read
+  /* bool stop_headers = false; */
+
+  /* cursor.empty_mem = true;  // move to initializator */
+  /* size_t completed_headers = 0; // I dont remember why I used this */
+  /* bool should_read = true; */
+  while (1) {
+
+    if (should_read) {
+
+      /* should_read = true; */
+      /* struct timeval tv; */
+      /* tv.tv_sec = 30; // 30 segundos timeout */
+      /* tv.tv_usec = 0; */
+      /* setsockopt(get_client_fd(local_machine), SOL_SOCKET, SO_RCVTIMEO, &tv,
+       */
+      /*            sizeof(tv)); */
+
+      local_machine->server_ctx->n =
+          read(get_client_fd(local_machine), read_buffer, BUFFER - 1);
+      if (local_machine->server_ctx->n == 0) { // Client close conn
+        return SOMETHING_WENT_WRONG;
+      }
+      if (local_machine->server_ctx->n == -1) {
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          return NEED_READ_MORE_DATA;
+        }
+        return SOMETHING_WENT_WRONG;
+      }
+    }
+    switch (get_state(local_machine)) {
+
+    // Frist case:
+    case PROCESSING_REQUEST_LINE: {
+      logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
+      action_t result = process_request_line(local_machine, send_buffer);
+      handle_action(result);
+      [[fallthrough]];
+    }
+
+    case PROCESSING_HEADERS: {
+
+      action_t result = process_headers(local_machine, send_buffer);
+      handle_action(result);
+
+      [[fallthrough]];
+    }
+    case WORKING: {
+      action_t result = process_work(local_machine, send_buffer);
+      handle_action(result);
+    }
+    default:
+      unreachable();
+    }
+    if (get_state(local_machine) == ENDING) {
+
+      break;
+    }
+    if (get_state(local_machine) != WORKING) {
+
+      memset(read_buffer, 0, (size_t)BUFFER);
+    } else {
+      break;
+    }
+    memset(send_buffer, 0, (size_t)BUFFER);
+  }
+
+  return FINISHED;
+}
+static ssize_t seek_separator(const char *params) {
+  for (size_t i = 0; params[i] != '\0'; i++) {
+    if (params[i] == '&') {
+      return i;
+    }
+  }
+  return -1;
+}
+static enum http_methods_t get_method(char *r, size_t *start_url) {
   char *first_space = strchr(r, ' ');
   if (first_space == nullptr) {
     return -1; // No space found, invalid request
@@ -159,18 +297,7 @@ enum http_methods_t get_method(char *r, size_t *start_url) {
     return -1; // Unknown method
   }
 }
-
-#define THIS_ROUTE (get_routes()[get_route_index(local_machine)])
-
-/**
- * Finds the index of the server_routes_t with a matching uri_regex.
- *
- * Expects: url to be a null-terminated string.
- *
- * @param url The URL string to check.
- * @return The index of the matching server_routes_t, or -1 if not found.
- */
-ssize_t check_url(const char *url) {
+static ssize_t check_url(const char *url) {
   const server_routes_t *local_routes = get_routes();
 
   for (size_t i = 0; local_routes[i].uri_regex != nullptr; i++) {
@@ -184,370 +311,333 @@ ssize_t check_url(const char *url) {
 
   return -1;
 }
+static action_t process_request_line(server_machine *local_machine,
+                                     char *send_buffer) {
+  action_t ret_val = {0};
+  size_t i = 1;
+  get_method(read_buffer, &i);
+  ssize_t route_index = check_url(read_buffer);
 
-// TODO: Check
+  char *url = read_buffer + i;
 
-#warning "bro I cant be this lazy lolllll"
-#define read_buffer local_machine->server_ctx->read_buffer
-#define cursor (*local_machine->server_ctx->cursor)
-#define completed_headers local_machine->server_ctx->completed_headers
-#define should_read local_machine->server_ctx->should_read
+  if (route_index == -1) {
 
-endpoint_return server_job(void *args) {
-  server_machine *local_machine = (server_machine *)args;
+    not_found(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr, nullptr);
+    set_state(local_machine, ENDING);
 
-  if (get_state(local_machine) == WAITING)
-    set_state(local_machine, PROCESSING_REQUEST_LINE);
-  char send_buffer[BUFFER] = {0};
-  local_machine->server_ctx->n = 0; // number of bytes read
-  /* bool stop_headers = false; */
-
-  /* cursor.empty_mem = true;  // move to initializator */
-  /* size_t completed_headers = 0; // I dont remember why I used this */
-  /* bool should_read = true; */
-  while (1) {
-
-    if (should_read) {
-
-      should_read = true;
-      struct timeval tv;
-      tv.tv_sec = 30; // 30 segundos timeout
-      tv.tv_usec = 0;
-      setsockopt(get_client_fd(local_machine), SOL_SOCKET, SO_RCVTIMEO, &tv,
-                 sizeof(tv));
-
-      local_machine->server_ctx->n =
-          read(get_client_fd(local_machine), read_buffer, BUFFER - 1);
-      if (local_machine->server_ctx->n == 0) { // ← El cliente cerró la conexión
-        return SOMETHING_WENT_WRONG;
-      }
-      if (local_machine->server_ctx->n == -1) {
-
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-          return NEED_READ_MORE_DATA;
-        else
-          return SOMETHING_WENT_WRONG;
-      }
-    }
-    switch (get_state(local_machine)) {
-
-    // Frist case:
-    case PROCESSING_REQUEST_LINE: {
-#if LOG_LEVEL == LOG_HIGH
-      logger_log(read_buffer);
-#endif
-      size_t i = 1;
-      get_method(read_buffer, &i);
-      ssize_t route_index = check_url(read_buffer);
-
-      char *url = read_buffer + i;
-
-      if (route_index == -1) {
-
-        not_found(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
-        set_state(local_machine, ENDING);
-
-        should_read = false;
-        return SOMETHING_WENT_WRONG;
-        break;
-      }
-
-      int result = find_carriage(&cursor, read_buffer);
-      // NOTE: previously `result < 0` and it worked
-      if (result == -1 ||
-          result == 1) { // In order to proceed we need result should be 0 or 2
-                         // because the first line of the request shouldn't be
-                         // bigger than BUFFER
-
-        bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
-        set_state(local_machine, ENDING);
-        should_read = false;
-        break;
-      }
-      size_t j = 0;
-      for (; url[j] != '\0' && url[j] != '?' && url[j] != ' '; j++) {
-      }
-      if (url[j] == '?') {
-
-        char *param = url + j + 1;
-        ssize_t idx = 0;
-        for (; (idx = seek_separator(param)) != -1;) {
-          char *p = param;
-          p[idx] = '\0';
-          const char *to_add = strdup(p);
-          add_params(local_machine, to_add);
-          param += idx + 1;
-        }
-        for (size_t i = 0; param[i] != '\0'; i++) {
-          if (param[i] == ' ') {
-            idx = i;
-            break;
-          }
-        }
-        char *p = param;
-        p[idx] = '\0';
-        const char *to_add = strdup(p); // '\0'
-        add_params(local_machine, to_add);
-      }
-
-      // in order to have it when processing the request
-      cursor.curr =
-          ++cursor
-                .offset; // find_carriage modifies the offset, and because its
-                         // no longer needed to process that offset the current
-                         // index is assined the next character from the offset
-      set_route_index(
-          local_machine,
-          (size_t)route_index); // stored the `route_index` into `local_machine`
-
-      // NOTE: previously `result < 1` and it worked
-      if (result == 0) {
-
-        set_state(local_machine, PROCESSING_HEADERS);
-        // NOTE: previously `result < 2` and it worked
-      } else if (result == 2) {
-
-        set_state(local_machine, WORKING);
-        should_read = false;
-        break;
-      }
-      [[fallthrough]];
-    }
-
-    case PROCESSING_HEADERS: {
-      // read_buffer[BUFFER - 1] Will always be \0
-      // If he got here he had to be located at the first \r the one after HTTP
-      // version
-      // in http every line **should** end with crlf so before
-      // incrementing the indexes Its required to check for \0
-
-      if (cursor.curr == BUFFER - 1)
-        continue;
-      int result = find_carriage(&cursor, read_buffer);
-      if (result == -1) { // header too large
-        bad_request(get_client_fd(local_machine), BUFFER, nullptr,
-                    "Header too large");
-        set_state(local_machine, ENDING);
-        should_read = false;
-        break;
-      }
-      if (result == 2) {
-        set_state(local_machine, ENDING); //
-        should_read = false;
-        break;
-      }
-      if (result == 1) {
-        cursor.curr = 0;
-        cursor.offset = 0;
-        continue;
-      }
-      size_t i = 0;
-
-      char last_char = '\0'; // it will stored the las seen crlf char
-      size_t skips = 0; // will track the double CRLF, so lets say it founds
-                        // "b\r\nH" would be skip=0->skips++->skips++->skips=0
-      for (size_t *local_mem_index =
-               cursor.empty_mem
-                   ? &i
-                   : &cursor.curr_mem; // `local_mem_index` will be used as the
-                                       // `cursor.memory` index, if its empty
-                                       // `local_mem_index` will use `i` else
-                                       // will use `cursor.curr_mem`
-           cursor.curr <
-               (size_t)local_machine->server_ctx
-                   ->n && // n will never be 0 bc of while loop condition
-           (last_char != '\n' ||
-            skips != 4); // cursor.curr ist the last char of the string and
-                         // havent found double CRLF
-           cursor.curr++) {
-        if (read_buffer[cursor.curr] ==
-            '\r') { // As the for loop goes `cursor.curr` increments when whe
-                    // finally hit a \r it means that we have found the end of a
-                    // header
-          // TODO: process header;
-          if (cursor.memory[0] !=
-              '\0') { // We are in the end of a header(previous if) and the
-                      // cursor memory isnt empty so it has a header
-
-            size_t i = 0;
-            for (auto header = THIS_ROUTE.headers;
-                 header && header->key != nullptr; i++, header++) {
-              if ((completed_headers & ((size_t)1 << i)) !=
-                  0) { // As we iterate over the `server_routes_t` headers if we
-                       // find the same header the request in invalid
-
-                continue;
-                bad_request(get_client_fd(local_machine), BUFFER, nullptr,
-                            "Bad headers");
-                set_state(local_machine, ENDING);
-                should_read = false;
-                break;
-              } // TODO: refactor
-
-              bool good_header = true;
-
-              bool should_add = true; // ifts not required then we dont add it
-              if (header->validators != nullptr) {
-                // evaluates every validator, ( header[i] )->validators[j]
-                //
-                for (size_t j = 0;
-                     header->validators[j] != nullptr && good_header != false;
-                     good_header = header->validators[j](
-                         *header, // header must be dereferenced
-                         cursor.memory),
-                            j++) {
-                  if (!good_header && !header->required) {
-                    // this will matter only in the first
-                    // iteration of the loop, as its
-                    // required to add a header_key to be
-                    // the first validator, so if the
-                    // current header doesnt match the the
-                    // header key its set as good_header,
-                    // so if the header ends up being later
-                    // in the data stream then it will
-                    // obviusly match
-                    // `validator_header_key` and wont fall
-                    // inside the if statement and will be
-                    // properly validated, but if the
-                    // header is missing and its not
-                    // required then it will be set as
-                    // good_header and shouldnt be added to
-                    // the headers list of the
-                    // local_machine, so `should_add` is
-                    // set to false to avoid adding it
-                    // later
-                    good_header = true;
-                    should_add = false;
-                    break;
-                  }
-                }
-              } else {
-              }
-
-              if (good_header) {
-                completed_headers |= ((size_t)1 << i);
-                if (should_add) {
-
-                  char *temp = malloc(strlen(cursor.memory) + 1);
-                  strcpy(temp, cursor.memory);
-                  add_header(local_machine, temp);
-                }
-              } else {
-              }
-            }
-            if (get_state(local_machine) == ENDING)
-              break;
-          }
-
-          last_char = '\r';     // every header ends with crlf.
-          skips++;              // every header ends with crlf.
-          *local_mem_index = 0; // reset the local memory index to 0 to start
-                                // storing the next header
-
-          bzero(cursor.memory, BUFFER);
-          continue;
-
-        } else if (read_buffer[cursor.curr] == '\n') {
-          last_char = '\n';
-          skips++;
-          continue;
-        } else {
-          // It didnt found \r or \n so we arent in the end of the header
-          skips = 0;
-          last_char = '\0';
-        }
-        cursor.memory[(*local_mem_index)++] =
-            read_buffer[cursor.curr]; // this is to store the current header
-                                      // into `cursor.memory` while incrementing
-                                      // its index
-      }
-      if (cursor.curr ==
-          (size_t)local_machine->server_ctx->n) { // end of the stream
-
-        cursor.curr = 0;
-        cursor.offset = 0;
-      }
-      if (last_char == '\n' &&
-          skips == 4) { // double CRLF found, end of headers
-
-        size_t k = 0;
-        for (auto header = THIS_ROUTE.headers; header && header->key != nullptr;
-             k++, header++) {
-          if ((completed_headers & ((size_t)1 << k)) != 1 && header->required) {
-            bad_request(get_client_fd(local_machine), BUFFER, nullptr,
-                        "Bad headers");
-            set_state(local_machine, ENDING);
-            should_read = false;
-            break;
-          }
-        }
-        if (get_state(local_machine) == ENDING)
-          break;
-        if (local_machine->server_ctx->n < BUFFER - 1 &&
-            (size_t)local_machine->server_ctx->n == cursor.curr &&
-            get_http_method(get_route_index(local_machine)) < HTTP_POST) {
-          bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
-          set_state(local_machine, ENDING);
-
-          should_read = false;
-          break;
-        }
-        bzero(cursor.memory, BUFFER);
-        set_state(local_machine, WORKING);
-        if (cursor.curr == 0 &&
-            (get_http_method(get_route_index(local_machine)) == HTTP_POST ||
-             get_http_method(get_route_index(local_machine)) == HTTP_PUT)) {
-          bad_request(get_client_fd(local_machine), BUFFER, nullptr,
-                      "PUT and POST methods require a body");
-          break;
-        } else {
-
-          cursor.curr_mem = 0;
-          cursor.empty_mem = true;
-          cursor.offset = cursor.curr;
-        }
-
-      } else {
-        should_read = true;
-        break; // keep processing headers
-      }
-      [[fallthrough]];
-    }
-    case WORKING: {
-      should_read = false;
-
-      assert(get_state(local_machine) == WORKING);
-      endpoint_return ret = api_jump_table(&cursor, local_machine, read_buffer);
-      switch (ret) {
-      case SOMETHING_WENT_WRONG:
-      case FINISHED:
-
-        break;
-
-      case NEED_READ_MORE_DATA:
-      case NEED_WRITE_MORE_DATA:
-        return ret;
-      default:
-        unreachable();
-      }
-      set_state(local_machine, WAITING);
-      return ret;
-    }
-    default:
-      unreachable();
-    }
-    if (get_state(local_machine) == ENDING) {
-
-      break;
-    }
-    if (get_state(local_machine) != WORKING) {
-
-      bzero(read_buffer, BUFFER);
-    } else {
-      break;
-    }
-    bzero(send_buffer, BUFFER);
+    should_read = false;
+    ret_val.type = RETURN;
+    ret_val.return_status = SOMETHING_WENT_WRONG;
+    return ret_val;
   }
 
-  return FINISHED;
+  carriage_status result = find_carriage(&cursor, read_buffer);
+  // NOTE: previously `result < 0` and it worked
+  if (result == CARRIAGE_NOT_FOUND_MEM_NOT_EMPTY ||
+      result == CARRIAGE_NOT_FOUND_MEM_PUSHED) { // In order to proceed we need
+                                                 // result should be 0 or 2
+    // because the first line of the request shouldn't be
+    // bigger than BUFFER
+
+    bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+    set_state(local_machine, ENDING);
+    should_read = false;
+    ret_val.type = BREAK;
+    return ret_val;
+  }
+  size_t j = 0;
+  for (; url[j] != '\0' && url[j] != '?' && url[j] != ' '; j++) {
+  }
+  if (url[j] == '?') {
+
+    char *param = url + j + 1;
+    ssize_t idx = 0;
+    for (; (idx = seek_separator(param)) != -1;) {
+      char *p = param;
+      p[idx] = '\0';
+      const char *to_add = strdup(p);
+      add_params(local_machine, to_add);
+      param += idx + 1;
+    }
+    for (size_t i = 0; param[i] != '\0'; i++) {
+      if (param[i] == ' ') {
+        idx = i;
+        break;
+      }
+    }
+    char *p = param;
+    p[idx] = '\0';
+    const char *to_add = strdup(p); // '\0'
+    add_params(local_machine, to_add);
+  }
+
+  // in order to have it when processing the request
+  cursor.curr =
+      ++cursor.offset; // find_carriage modifies the offset, and because its
+                       // no longer needed to process that offset the current
+                       // index is assined the next character from the offset
+  set_route_index(
+      local_machine,
+      (size_t)route_index); // stored the `route_index` into `local_machine`
+
+  // NOTE: previously `result < 1` and it worked
+  if (CARRIAGE_FOUND == 0) {
+
+    set_state(local_machine, PROCESSING_HEADERS);
+    // NOTE: previously `result < 2` and it worked
+  } else if (result == CARRIAGE_DOUBLE) {
+
+    set_state(local_machine, WORKING);
+    should_read = false;
+    ret_val.type = BREAK;
+    return ret_val;
+  }
+}
+static action_t process_headers(server_machine *local_machine,
+                                char *send_buffer) {
+  action_t ret_val = {0};
+  // read_buffer[BUFFER - 1] Will always be \0
+  // If he got here he had to be located at the first \r the one after HTTP
+  // version
+  // in http every line **should** end with crlf so before
+  // incrementing the indexes Its required to check for \0
+
+  if (cursor.curr == BUFFER - 1) {
+    ret_val.type = CONTINUE;
+    return ret_val;
+  }
+  carriage_status result = find_carriage(&cursor, read_buffer);
+  if (result == CARRIAGE_NOT_FOUND_MEM_NOT_EMPTY) { // header too large
+    bad_request(get_client_fd(local_machine), BUFFER, nullptr,
+                "Header too large");
+    set_state(local_machine, ENDING);
+    should_read = false;
+    ret_val.type = BREAK;
+    return ret_val;
+  }
+  if (result == CARRIAGE_DOUBLE) {
+    set_state(local_machine, ENDING); //
+    should_read = false;
+    ret_val.type = BREAK;
+    return ret_val;
+  }
+  if (result == CARRIAGE_NOT_FOUND_MEM_PUSHED) {
+    cursor.curr = 0;
+    cursor.offset = 0;
+    ret_val.type = CONTINUE;
+    return ret_val;
+  }
+  size_t i = 0;
+
+  char last_char = '\0'; // it will stored the las seen crlf char
+  size_t skips = 0;      // will track the double CRLF, so lets say it founds
+                         // "b\r\nH" would be skip=0->skips++->skips++->skips=0
+  for (size_t *local_mem_index =
+           cursor.empty_mem
+               ? &i
+               : &cursor.curr_mem; // `local_mem_index` will be used as the
+                                   // `cursor.memory` index, if its empty
+                                   // `local_mem_index` will use `i` else
+                                   // will use `cursor.curr_mem`
+       cursor.curr < (size_t)local_machine->server_ctx
+                         ->n && // n will never be 0 bc of while loop condition
+       (last_char != '\n' ||
+        skips != 4); // cursor.curr ist the last char of the string and
+                     // havent found double CRLF
+       cursor.curr++) {
+    if (read_buffer[cursor.curr] ==
+        '\r') { // As the for loop goes `cursor.curr` increments when whe
+                // finally hit a \r it means that we have found the end of a
+                // header
+      // TODO: process header;
+      if (cursor.memory[0] !=
+          '\0') { // We are in the end of a header(previous if) and the
+                  // cursor memory isnt empty so it has a header
+
+        size_t headerIdx = 0;
+        for (auto header = THIS_ROUTE.headers; header && header->key != nullptr;
+             headerIdx++, header++) {
+          /* if ((completed_headers & ((size_t)1 << i)) != 0) { */
+          /* if (is_header_at_i_parsed(i)) { */
+          /*   // As we iterate over the */
+          /*   // `server_routes_t` headers if we */
+          /*   // find the same header the request in invalid */
+          /**/
+          /*   bad_request(get_client_fd(local_machine), BUFFER, nullptr, */
+          /*               "Bad headers"); */
+          /*   set_state(local_machine, ENDING); */
+          /*   should_read = false; */
+          /*   break; */
+          /* }  */
+          // TODO: refactor
+
+          bool good_header = true;
+
+          bool should_add = true; // ifts not required then we dont add it
+          if (header->validators != nullptr) {
+            // evaluates every validator, ( header[i] )->validators[j]
+            //
+            for (size_t j = 0;
+                 header->validators[j] != nullptr && good_header != false;
+                 good_header = header->validators[j](
+                     *header, // header must be dereferenced
+                     cursor.memory),
+                        j++) {
+              if (!good_header && !header->required) {
+                // this will matter only in the first
+                // iteration of the loop, as its
+                // required to add a header_key to be
+                // the first validator, so if the
+                // current header doesnt match the the
+                // header key its set as good_header,
+                // so if the header ends up being later
+                // in the data stream then it will
+                // obviusly match
+                // `validator_header_key` and wont fall
+                // inside the if statement and will be
+                // properly validated, but if the
+                // header is missing and its not
+                // required then it will be set as
+                // good_header and shouldnt be added to
+                // the headers list of the
+                // local_machine, so `should_add` is
+                // set to false to avoid adding it
+                // later
+                good_header = true;
+                should_add = false;
+                break;
+              }
+            }
+          } else {
+          }
+
+          if (good_header) {
+            /* header_at_i_is_parsed(i); */
+            if ((completed_headers & ((size_t)1 << headerIdx)) != 0) {
+
+              bad_request(get_client_fd(local_machine), (uint64_t)BUFFER,
+                          nullptr, "Bad headers");
+              set_state(local_machine, ENDING);
+              should_read = false;
+              break;
+            }
+            completed_headers |= ((size_t)1 << headerIdx);
+            if (should_add) {
+
+              char *temp = calloc(1, strlen(cursor.memory) + 1);
+              strcpy(temp, cursor.memory);
+              add_header(local_machine, temp);
+            }
+          } else {
+          }
+        }
+        if (get_state(local_machine) == ENDING) {
+          break;
+        }
+      }
+
+      last_char = '\r';     // every header ends with crlf.
+      skips++;              // every header ends with crlf.
+      *local_mem_index = 0; // reset the local memory index to 0 to start
+                            // storing the next header
+
+      memset(cursor.memory, 0, (size_t)BUFFER);
+      continue;
+    }
+    if (read_buffer[cursor.curr] == '\n') {
+      last_char = '\n';
+      skips++;
+      continue;
+    }
+    // It didnt found \r or \n so we arent in the end of the header
+    skips = 0;
+    last_char = '\0';
+    cursor.memory[(*local_mem_index)++] =
+        read_buffer[cursor.curr]; // this is to store the current header
+                                  // into `cursor.memory` while incrementing
+                                  // its index
+  }
+  if (cursor.curr ==
+      (size_t)local_machine->server_ctx->n) { // end of the stream
+
+    cursor.curr = 0;
+    cursor.offset = 0;
+  }
+  if (last_char == '\n' && skips == 4) { // double CRLF found, end of headers
+
+    size_t k = 0;
+    for (auto header = THIS_ROUTE.headers; header && header->key != nullptr;
+         k++, header++) {
+      if ((completed_headers & ((size_t)1 << k)) != 1 && header->required) {
+        /* if (!(is_header_at_i_parsed(k)) && header->required) { */
+        bad_request(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr,
+                    "Bad headers");
+        set_state(local_machine, ENDING);
+        should_read = false;
+        break;
+      }
+    }
+    if (get_state(local_machine) == ENDING) {
+      ret_val.type = BREAK;
+      return ret_val;
+    }
+    if (local_machine->server_ctx->n < BUFFER - 1 &&
+        (size_t)local_machine->server_ctx->n == cursor.curr &&
+        get_http_method(get_route_index(local_machine)) < HTTP_POST) {
+      bad_request(get_client_fd(local_machine), BUFFER, nullptr, nullptr);
+      set_state(local_machine, ENDING);
+
+      should_read = false;
+      ret_val.type = BREAK;
+      return ret_val;
+    }
+    memset(cursor.memory, 0, (size_t)BUFFER);
+    set_state(local_machine, WORKING);
+    if (cursor.curr == 0 &&
+        (get_http_method(get_route_index(local_machine)) == HTTP_POST ||
+         get_http_method(get_route_index(local_machine)) == HTTP_PUT)) {
+      bad_request(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr,
+                  "PUT and POST methods require a body");
+      ret_val.type = BREAK;
+      return ret_val;
+    }
+
+    cursor.curr_mem = 0;
+    cursor.empty_mem = true;
+    cursor.offset = cursor.curr;
+
+  } else {
+    should_read = true;
+
+    ret_val.type = BREAK;
+    return ret_val;
+    // keep processing headers
+  }
+}
+static action_t process_work(server_machine *local_machine, char *send_buffer) {
+  action_t ret_val = {0};
+  should_read = false;
+
+  assert(get_state(local_machine) == WORKING);
+  endpoint_return ret = api_jump_table(&cursor, local_machine, read_buffer);
+  ret_val.return_status = ret;
+  switch (ret) {
+  case SOMETHING_WENT_WRONG:
+  case FINISHED:
+
+    ret_val.type = BREAK;
+    return ret_val;
+
+  case NEED_READ_MORE_DATA:
+  case NEED_WRITE_MORE_DATA:
+    ret_val.type = RETURN;
+
+    return ret_val;
+  default:
+    unreachable();
+  }
+  set_state(local_machine, WAITING);
+  ret_val.type = RETURN;
+
+  return ret_val;
 }

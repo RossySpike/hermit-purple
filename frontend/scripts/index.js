@@ -1,5 +1,5 @@
-const API_BASE = "http://100.101.233.121:1600";
-// const API_BASE = "http://localhost:1600";
+// const API_BASE = "http://100.101.233.121:1600";
+const API_BASE = "http://localhost:1600";
 // const API_BASE = "http://192.168.0.10:1600"
 //
 // TODO: hacer que sea obtenido de input
@@ -122,11 +122,8 @@ async function fetchSingleBatch() {
     dynamicLimit = currentImgId;
   }
 
-
-
   const url = `${API_BASE}/api/image/cursor?current=${currentImgId}&limit=${dynamicLimit}`;
-  console.log("url: "
-    , url);
+  console.log("url: ", url);
 
   currentImgId -= dynamicLimit;
   if (dynamicLimit < 1) {
@@ -171,7 +168,7 @@ async function loadMultipleBatches() {
       currentImgId >= 0
     ) {
       const images = await fetchSingleBatch();
-      console.log("images:")
+      console.log("images:");
       console.log(images);
 
       if (images.length === 0) {
@@ -215,8 +212,7 @@ async function openImageModal(imgId) {
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     modalImage.src = url;
-    modalMessage.innerText =
-      "📸 To see the image on original resolution please press the button";
+    modalMessage.innerText = "📸 To see the image on original resolution please press the button";
     modalImage.onload = () => URL.revokeObjectURL(url);
   } catch (err) {
     modalMessage.innerText = `Error: ${err.message}`;
@@ -259,8 +255,7 @@ async function uploadImage(file) {
       });
       showError("✅ Uploading...");
 
-      if (!response.ok)
-        throw new Error(`Failed to upload image: ${response.status}`);
+      if (!response.ok) throw new Error(`Failed to upload image: ${response.status}`);
       showError("✅ Reloading gallery...");
       await initGallery();
     } catch (err) {
@@ -296,16 +291,14 @@ async function initGallery() {
   } catch (err) {
     showError(`Failed: ${err.message}`);
     if (loaderContainer) {
-      loaderContainer.innerHTML =
-        '<p style="color: #ff6b6b;">❌ Connection error.</p>';
+      loaderContainer.innerHTML = '<p style="color: #ff6b6b;">❌ Connection error.</p>';
     }
     if (loadMoreBtn) loadMoreBtn.disabled = true;
   }
 }
 function closeModal() {
   modal.style.display = "none";
-  if (modalImage.src && modalImage.src.startsWith("blob:"))
-    URL.revokeObjectURL(modalImage.src);
+  if (modalImage.src && modalImage.src.startsWith("blob:")) URL.revokeObjectURL(modalImage.src);
   currentModalId = null;
 }
 
@@ -326,28 +319,33 @@ ticking = false;
 document.addEventListener("scroll", (event) => {
   lastKnownPos = window.scrollY;
   // console.log("aqui")
-  const childs = galleryEl.childNodes
+  const childs = galleryEl.childNodes;
   // console.log(childs);
-  const filtered = [...childs].filter((val) => "classList" in val).filter((node) => node.classList.contains("card"));
-  console.log("filter")
+  const filtered = [...childs]
+    .filter((val) => "classList" in val)
+    .filter((node) => node.classList.contains("card"));
+  console.log("filter");
 
-  console.log(filtered.length)
+  console.log(filtered.length);
   let lastImage = undefined;
   if (filtered.length === 1) {
     lastImage = filtered[filtered.length - 1];
 
-    console.log(`lastImage: ${lastImage.getBoundingClientRect().top + lastKnownPos}`)
+    console.log(`lastImage: ${lastImage.getBoundingClientRect().top + lastKnownPos}`);
   }
 
   // filtered.forEach((a) => console.log(a.classList.contains("card")));
   // console.log(galleryEl.childNodes.entries().filter((child) => child.clasList.entries.some((child_class) => "card" === child_class)));
   if (!ticking) {
-
     setTimeout(() => {
-      if (hasMore && lastImage && lastImage.getBoundingClientRect().top + lastKnownPos <= lastKnownPos);
+      if (
+        hasMore &&
+        lastImage &&
+        lastImage.getBoundingClientRect().top + lastKnownPos <= lastKnownPos
+      );
       loadMultipleBatches();
       ticking = false;
     }, 20);
   }
   ticking = true;
-})
+});

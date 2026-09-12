@@ -19,5 +19,7 @@ int not_found(int client_fd, uint64_t buffer, const char *headers,
               const char *body);
 int created(int client_fd, uint64_t buffer, const char *headers,
             const char *body);
+int request_timeout(int client_fd, uint64_t buffer, const char *headers,
+                    const char *body);
 
 #endif // COMMON_RESPONSE_H
