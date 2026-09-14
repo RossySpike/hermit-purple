@@ -1,8 +1,8 @@
 #ifndef SERVER_MACHINE_H
 #define SERVER_MACHINE_H
 #include "../includes/list.h"
-#include "server.h"
 #include "server-timer.h"
+#include "server.h"
 #include <stddef.h>
 typedef enum server_states {
   WAITING,
@@ -12,8 +12,8 @@ typedef enum server_states {
   ENDING,
 } server_states;
 typedef struct server_machine {
-  server_states state;
-  server_states prev_state;
+  volatile server_states state;
+  volatile server_states prev_state;
   int client_fd;
   size_t route_idx;
   timer timer;

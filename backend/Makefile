@@ -15,7 +15,7 @@ SRCS     := $(wildcard ./src/*.c) main.c
 
 
 make:
-	$(CC)  -O2  $(CFLAGS_PROD) $(shell pkg-config --cflags vips)  $(SRCS) -o ./test/hermit-purple $(LD_FLAGS)
+	$(CC)  -O2   $(CFLAGS_PROD) $(shell pkg-config --cflags vips)  $(SRCS) -o ./test/hermit-purple $(LD_FLAGS)
 make-bundled: 
 	$(CC) -DIS_BUNDLED  -O2  $(CFLAGS_PROD) $(SRCS) -o ./test/hermit-purple.bundled $(BUNDLED_LD_FLAGS)
 

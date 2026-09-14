@@ -7,8 +7,8 @@
 #include "server-defines.h"
 #include "server-machine.h"
 #include "server-routes.h"
-#include "server.h"
 #include "server-timer.h"
+#include "server.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>

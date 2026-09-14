@@ -20,3 +20,6 @@ backend/**/*.png
 backend/**/*.webp
 .gdb*
 tests.env
+backend/.ignore
+backend/ghidra
+__pycache__

@@ -19,7 +19,7 @@ typedef enum {
 } log_level;
 #define log_level_t size_t
 
-#define LOG_LEVEL LOG_BASIC
+#define LOG_LEVEL LOG_HIGH
 // #define LOG_FILE
 
 #define BACKLOG 1

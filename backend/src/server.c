@@ -31,12 +31,15 @@
 // NOTHING, RETURN, BREAK, CONTINUE
 #define handle_action(action)                                                  \
   if ((action).type == CONTINUE) {                                             \
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: CONTINUE\n", __LINE__);          \
     continue;                                                                  \
   }                                                                            \
   if ((action).type == BREAK) {                                                \
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: BREAK\n", __func__, __LINE__);   \
     break;                                                                     \
   }                                                                            \
   if ((action).type == RETURN) {                                               \
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: RETURN\n", __func__, __LINE__);  \
     return (action).return_status;                                             \
   }
 
@@ -223,7 +226,8 @@ endpoint_return server_job(void *args) {
     }
     switch (get_state(local_machine)) {
 
-    // Frist case:
+      // Frist case:
+
     case PROCESSING_REQUEST_LINE: {
       logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
       action_t result = process_request_line(local_machine, send_buffer);
@@ -327,6 +331,8 @@ static action_t process_request_line(server_machine *local_machine,
 
     should_read = false;
     ret_val.type = RETURN;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     ret_val.return_status = SOMETHING_WENT_WRONG;
     return ret_val;
   }
@@ -343,6 +349,8 @@ static action_t process_request_line(server_machine *local_machine,
     set_state(local_machine, ENDING);
     should_read = false;
     ret_val.type = BREAK;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
   }
   size_t j = 0;
@@ -381,17 +389,22 @@ static action_t process_request_line(server_machine *local_machine,
       (size_t)route_index); // stored the `route_index` into `local_machine`
 
   // NOTE: previously `result < 1` and it worked
-  if (CARRIAGE_FOUND == 0) {
+  if (CARRIAGE_FOUND == result) {
 
     set_state(local_machine, PROCESSING_HEADERS);
     // NOTE: previously `result < 2` and it worked
+    ret_val.type = NOTHING;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
   } else if (result == CARRIAGE_DOUBLE) {
 
     set_state(local_machine, WORKING);
     should_read = false;
     ret_val.type = BREAK;
-    return ret_val;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
   }
+  return ret_val;
 }
 static action_t process_headers(server_machine *local_machine,
                                 char *send_buffer) {
@@ -404,6 +417,8 @@ static action_t process_headers(server_machine *local_machine,
 
   if (cursor.curr == BUFFER - 1) {
     ret_val.type = CONTINUE;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
   }
   carriage_status result = find_carriage(&cursor, read_buffer);
@@ -413,18 +428,24 @@ static action_t process_headers(server_machine *local_machine,
     set_state(local_machine, ENDING);
     should_read = false;
     ret_val.type = BREAK;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
   }
   if (result == CARRIAGE_DOUBLE) {
     set_state(local_machine, ENDING); //
     should_read = false;
     ret_val.type = BREAK;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
   }
   if (result == CARRIAGE_NOT_FOUND_MEM_PUSHED) {
     cursor.curr = 0;
     cursor.offset = 0;
     ret_val.type = CONTINUE;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
   }
   size_t i = 0;
@@ -579,6 +600,8 @@ static action_t process_headers(server_machine *local_machine,
     }
     if (get_state(local_machine) == ENDING) {
       ret_val.type = BREAK;
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+                 __LINE__, ret_val.type);
       return ret_val;
     }
     if (local_machine->server_ctx->n < BUFFER - 1 &&
@@ -589,6 +612,8 @@ static action_t process_headers(server_machine *local_machine,
 
       should_read = false;
       ret_val.type = BREAK;
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+                 __LINE__, ret_val.type);
       return ret_val;
     }
     memset(cursor.memory, 0, (size_t)BUFFER);
@@ -599,6 +624,8 @@ static action_t process_headers(server_machine *local_machine,
       bad_request(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr,
                   "PUT and POST methods require a body");
       ret_val.type = BREAK;
+      logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+                 __LINE__, ret_val.type);
       return ret_val;
     }
 
@@ -610,6 +637,8 @@ static action_t process_headers(server_machine *local_machine,
     should_read = true;
 
     ret_val.type = BREAK;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
     // keep processing headers
   }
@@ -626,11 +655,15 @@ static action_t process_work(server_machine *local_machine, char *send_buffer) {
   case FINISHED:
 
     ret_val.type = BREAK;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
     return ret_val;
 
   case NEED_READ_MORE_DATA:
   case NEED_WRITE_MORE_DATA:
     ret_val.type = RETURN;
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
+               __LINE__, ret_val.type);
 
     return ret_val;
   default:
@@ -638,6 +671,8 @@ static action_t process_work(server_machine *local_machine, char *send_buffer) {
   }
   set_state(local_machine, WAITING);
   ret_val.type = RETURN;
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__, __LINE__,
+             ret_val.type);
 
   return ret_val;
 }

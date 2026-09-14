@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 static const char *const cors_headers =
+    "Connection: close\r\n" // HACK
     "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: "
     "GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, "
     "Accept\r\nAccess-Control-Expose-Headers: Content-Length, "

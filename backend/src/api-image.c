@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h> // for open() function
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -783,8 +784,11 @@ endpoint_return options_post_api_image(server_machine *machine) {
 endpoint_return get_api_image_cursor_start(server_machine *machine) {
 
   char buffer[BUFFER] = {0};
-  snprintf(buffer, BUFFER, "HTTP/1.1 200 OK\r\n%s: %s\r\n%s\r\n\r\n%llu",
-           "Server", HOST_NAME, cors_headers, get_idx());
+  const uint64_t idx = get_idx();
+  size_t bytes = snprintf(nullptr, 0, "%llu", idx);
+  snprintf(buffer, BUFFER,
+           "HTTP/1.1 200 OK\r\n%s: %zu\r\n%s: %s\r\n%s\r\n\r\n%llu",
+           "Content-Length", bytes, "Server", HOST_NAME, cors_headers, idx);
   assert(write(get_client_fd(machine), buffer, strlen(buffer)));
   return FINISHED;
 }
