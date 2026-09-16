@@ -1,0 +1,119 @@
+[LOG] file created at: ./hermit-purple.log
+appended: 12
+appended: 11
+appended: 10
+appended: 9
+appended: 8
+appended: 7
+appended: 6
+appended: 5
+appended: 4
+appended: 3
+appended: 2
+appended: 1
+len: 12, cap: 16
+files: [ 1  2  3  4  5  6  7  8  9  10  11  12 ] 
+main: Server: ev.events=EPOLLINListening for events provided by fd: 4
+FD IS TIMER FOR MACHINE 0x7ffcd4231280 Listening for events provided by fd: 6
+FD IS TIMER FOR MACHINE 0x7ffcd42312d8 Listening for events provided by fd: 7
+FD IS TIMER FOR MACHINE 0x7ffcd4231330 Listening for events provided by fd: 8
+FD IS TIMER FOR MACHINE 0x7ffcd4231388 Listening for events provided by fd: 9
+FD IS TIMER FOR MACHINE 0x7ffcd42313e0 Listening for events provided by fd: 10
+FD IS TIMER FOR MACHINE 0x7ffcd4231438 Listening for events provided by fd: 11
+FD IS TIMER FOR MACHINE 0x7ffcd4231490 Listening for events provided by fd: 12
+FD IS TIMER FOR MACHINE 0x7ffcd42314e8 Listening for events provided by fd: 13
+FD IS TIMER FOR MACHINE 0x7ffcd4231540 Listening for events provided by fd: 14
+FD IS TIMER FOR MACHINE 0x7ffcd4231598 Listening for events provided by fd: 15
+DEBUG_MAX_CYCLES: UNDEFINED
+RECEIVED EVENTS: i: 0 len: 1 fd[i]: 4
+main event[i]_fd is server, client_fd: 32764
+Attempt adding client/requester fd: 4 into list of events
+main: new socket Listening for events provided by fd: 16
+fd: 16 added
+RECEIVED EVENTS: i: 0 len: 1 fd[i]: 16
+events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ !selected
+machine->server_ctx: 0x563dc07c19b0        
+machine->server_ctx->free_endpoint_ctx: (nil)        
+server_timer_stop: stopping timer for fd: 6
+server_timer_start: starting timer for fd: 6
+GET /api/image/cursor?current=-1&limit=2 HTTP/1.1
+Host: localhost:1600
+User-Agent: curl/8.22.0
+Accept: */*
+
+process_request_line:335: ret_val (1)
+server_job:234: RETURN
+event_fd: 16
+FINISHED/SOMETHING_WENT_WRONG:
+event_handler_del: deleting fd: 16
+machine->server_ctx: 0x563dc07c19b0        
+machine->server_ctx->free_endpoint_ctx: (nil)        
+server_machine_reset:161: closing `machine->client_fd` (16)
+server_timer_stop: stopping timer for fd: 6
+RECEIVED EVENTS: i: 0 len: 1 fd[i]: 4
+main event[i]_fd is server, client_fd: 16
+Attempt adding client/requester fd: 4 into list of events
+main: new socket Listening for events provided by fd: 16
+fd: 16 added
+RECEIVED EVENTS: i: 0 len: 1 fd[i]: 16
+events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ events[i].data.fd == get_client_fd(&machine[w])
+16 == -1: 0
+ !selected
+machine->server_ctx: 0x563dc07c19b0        
+machine->server_ctx->free_endpoint_ctx: (nil)        
+server_timer_stop: stopping timer for fd: 6
+server_timer_start: starting timer for fd: 6
+GET /api/image/cursor?current=1&limit=2 HTTP/1.1
+Host: localhost:1600
+User-Agent: curl/8.22.0
+Accept: */*
+
+process_request_line:398: ret_val (0)
+get_api_image_cursor:
+process_work:659: ret_val (2)
+server_job:247: BREAK
+event_fd: 16
+FINISHED/SOMETHING_WENT_WRONG:
+event_handler_del: deleting fd: 16
+machine->server_ctx: 0x563dc07c19b0        
+machine->server_ctx->free_endpoint_ctx: (nil)        
+server_machine_reset:161: closing `machine->client_fd` (16)
+server_timer_stop: stopping timer for fd: 6

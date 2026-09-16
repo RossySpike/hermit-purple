@@ -16,15 +16,15 @@ log() {
 
 send_request() {
   log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
-  echo "curl -v -s       \"http://$HOST/api/image/cursor?current=\"$2\"&limit=\"$3\" \"" >&2
-  RESULT=$(curl -v -s "http://$HOST/api/image/cursor?current=$2&limit=$3 ")
+  echo "curl -v -s       \"http://$HOST/api/image/cursor?current=\"$2\"&limit=\"$3\"\"" >&2
+  RESULT=$(curl -v -s "http://$HOST/api/image/cursor?current=$2&limit=$3")
   log "RESULT:=$RESULT"
   echo "$RESULT"
 
 }
 
 TEST=$(send_request -1 2)
-if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid current parameter" ]; then
+if [ "$TEST" = "Not Found" ] || [ "$TEST" = "Invalid current parameter" ]; then
   echo "Test passed"
 
 else
@@ -32,7 +32,7 @@ else
   exit 1
 fi
 TEST=$(send_request 5 -2)
-if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid limit parameter" ]; then
+if [ "$TEST" = "Not Found" ] || [ "$TEST" = "Invalid limit parameter" ]; then
   echo "Test passed"
 
 else
