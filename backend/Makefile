@@ -42,13 +42,17 @@ run-tests-dev: test
 	./test/main.test.out & PID=$$! ; \
 	sleep 2 ; \
 	cd ./tests/ && ./run_tests.sh ; \
-	kill $$PID
+	TEST_STATUS=$$?;\
+	kill $$PID;
+	exit $$TEST_STATUS
 
 run-tests-prod: make
 	./test/hermit-purple & PID=$$! ; \
 	sleep 2 ; \
 	cd ./tests/ && ./run_tests.sh ; \
-	kill $$PID
+	TEST_STATUS=$$?;\
+	kill $$PID;
+	exit $$TEST_STATUS
 
 
 clean:
