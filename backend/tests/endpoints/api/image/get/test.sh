@@ -12,6 +12,10 @@ log() {
   echo "$1" >>"$LOG_FILE"
 }
 log "Starting log for /api/image/get/ test"
+tar -xzvf "$THIS_DIR"/images-files.tar.gz -C "$THIS_DIR" || {
+  echo "tar failed."
+  exit 1
+}
 
 send_request() {
   log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
