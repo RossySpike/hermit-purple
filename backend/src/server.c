@@ -188,6 +188,10 @@ static action_t process_headers(server_machine *local_machine,
 static action_t process_work(server_machine *local_machine, char *send_buffer);
 endpoint_return server_job(void *args) {
   server_machine *local_machine = (server_machine *)args;
+  logger_log(LOG_HIGH | LOG_MEDIUM, "Client: %d,-----\n",
+             get_client_fd(local_machine));
+  logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
+  logger_log(LOG_HIGH | LOG_MEDIUM, "\n-----\n");
 
   if (get_state(local_machine) == WAITING) {
     set_state(local_machine, PROCESSING_REQUEST_LINE);
@@ -229,7 +233,6 @@ endpoint_return server_job(void *args) {
       // Frist case:
 
     case PROCESSING_REQUEST_LINE: {
-      logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
       action_t result = process_request_line(local_machine, send_buffer);
       handle_action(result);
       [[fallthrough]];
@@ -642,6 +645,11 @@ static action_t process_headers(server_machine *local_machine,
     return ret_val;
     // keep processing headers
   }
+#warning "I dunno"
+  ret_val.type = NOTHING;
+  logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__, __LINE__,
+             ret_val.type);
+  return ret_val;
 }
 static action_t process_work(server_machine *local_machine, char *send_buffer) {
   action_t ret_val = {0};
