@@ -1,6 +1,12 @@
 #!/bin/bash
 THIS_DIR="$PATH_TO_TESTS_DIR/endpoints/api/image/cursor/get"
 echo "COMPARING RETRIEVED FILES WITH LOCAL IMAGES"
+
+tar -xzvf "$THIS_DIR"/images-files.tar.gz -C "$THIS_DIR" || {
+  echo "tar failed."
+  exit 1
+}
+
 RESULT=$(python "$THIS_DIR/test.py")
 echo "$RESULT"
 if [ "$RESULT" != "TEST PASSED" ]; then
