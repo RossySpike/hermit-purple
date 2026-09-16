@@ -5,8 +5,7 @@ import sys
 import struct
 
 HOST: str = os.environ["HOST"]
-PATH_TO_TESTS_DIR: str = os.environ["PATH_TO_TESTS_DIR"]
-THIS_DIR: str = f"{PATH_TO_TESTS_DIR}/endpoints/api/image/cursor/get"
+THIS_DIR: str = os.path.dirname(os.path.abspath(__file__))
 
 
 class Batch:
