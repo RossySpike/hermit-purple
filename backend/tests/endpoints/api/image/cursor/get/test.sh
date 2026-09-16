@@ -39,5 +39,21 @@ else
   echo "Test failed"
   exit 1
 fi
+TEST=$(send_request 5 7)
+if [ "$TEST" = "Invalid limit parameter" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+TEST=$(send_request 999 7)
+if [ "$TEST" = "Current parameter exceeds available images" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
 
 exit 0
