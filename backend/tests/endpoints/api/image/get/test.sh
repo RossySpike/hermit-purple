@@ -21,7 +21,7 @@ send_request() {
   log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
   log "REQUEST DATA: $2"
   echo "curl -v -s -D \"$2\" -X POST -H \"Expect: \" -H \"Content-Length: $(wc -c <"$1")\" --data-binary @\"$1\" \"http://$HOST/api/image\"" >&2
-  RESULT=$(curl -v -s -D "$2" -X POST -H "Expect: " -H "Content-Length: $(wc -c <"$1")" --data-binary @"$1" "http://$HOST/api/image" 2>"/tmp/hermit-purple-test-helper.log")
+  RESULT=$(curl -v -s --no-buffer -D "$2" -X POST -H "Expect: " -H "Content-Length: $(wc -c <"$1")" --data-binary @"$1" "http://$HOST/api/image" 2>"/tmp/hermit-purple-test-helper.log")
   log "RESULT:=$RESULT"
   cat /tmp/hermit-purple-test-helper.log >>"$2"
   echo "$RESULT"
