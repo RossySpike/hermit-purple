@@ -43,8 +43,8 @@ run-tests-dev: test
 	sleep 2 ; \
 	cd ./tests/ && ./run_tests.sh ; \
 	TEST_STATUS=$$?;\
-	kill $$PID;
-	echo "TEST_STATUS: $$TEST_STATUS" \
+	kill $$PID; \
+	echo "TEST_STATUS: $$TEST_STATUS"; \
 	exit $$TEST_STATUS
 
 run-tests-prod: make
@@ -52,8 +52,8 @@ run-tests-prod: make
 	sleep 2 ; \
 	cd ./tests/ && ./run_tests.sh ; \
 	TEST_STATUS=$$?;\
-	kill $$PID;
-	echo "TEST_STATUS: $$TEST_STATUS" \
+	kill $$PID; \
+	echo "TEST_STATUS: $$TEST_STATUS"; \
 	exit $$TEST_STATUS
 
 
