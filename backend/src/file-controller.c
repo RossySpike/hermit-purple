@@ -3,6 +3,7 @@
 #include "defines.h"
 #include "files.h"
 #include "logger.h"
+#include "utils.h"
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -31,7 +32,7 @@ int sort_asc(const void *a, const void *b) {
 }
 
 uint64_t file_controller_get_length(void) { return this.images.len; }
-void file_controller_init() {
+bool file_controller_init() {
 
   controller = calloc(1, sizeof(file_controller));
   list_new(&this.images);
@@ -54,10 +55,11 @@ void file_controller_init() {
     char *file_name = entry->d_name;
     file_name[i] = '\0';
 
-    /* uint64_t *ptr = calloc(1,sizeof(uint64_t)); */
-    /* *ptr = strtoull(file_name, nullptr, 10); */
-
-    file_controller_record_file(strtoull(file_name, nullptr, 10));
+    uint64_t to_be_recorded = 0;
+    if (!utils_str_to_uint64(file_name, &to_be_recorded)) {
+      return false;
+    }
+    file_controller_record_file(to_be_recorded);
     logger_log(LOG_HIGH | LOG_MEDIUM, "appended: %" PRIu64 "\n",
                this_at(this.images.len - 1));
   }
@@ -74,6 +76,7 @@ void file_controller_init() {
     logger_log(LOG_HIGH | LOG_MEDIUM, " %" PRIu64 " ", this_at(i));
   }
   logger_log(LOG_HIGH | LOG_MEDIUM, "] \n");
+  return true;
 }
 
 void file_controller_record_file(uint64_t id) {
@@ -156,8 +159,10 @@ file file_controller_open_image_by_idx(const char *const idx,
                                        const char *const path) {
 
   size_t position = 0;
-#warning "check for overflow"
-  uint64_t idx_as_num = strtoull(idx, nullptr, 10);
+  uint64_t idx_as_num = 0;
+  if (!utils_str_to_uint64(idx, &idx_as_num)) {
+    return (file){0};
+  }
 
   bool idx_is_registered = file_controller_find(idx_as_num, &position);
   return !idx_is_registered ? (file){0} : open_img_at(idx, path);

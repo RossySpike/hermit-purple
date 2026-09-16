@@ -35,8 +35,6 @@
 #warning                                                                       \
     "here start time out to kill the request maybe with timerfd and hook it to epoll"
 
-#warning                                                                       \
-    "for strtoull ERRORS This function does not modify errno on success. ERANGE The resulting value was out of range. The implementation may also set errno to EINVAL in case no conversion was performed(no digits seen, and 0 returned)"
 uint64_t get_next_idx();
 
 uint64_t get_idx();

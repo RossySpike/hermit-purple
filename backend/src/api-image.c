@@ -4,10 +4,10 @@
 #include "../includes/server-defines.h"
 #include "../includes/server-machine.h"
 #include "logger.h"
+#include "utils.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h> // for open() function
-#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -342,8 +342,13 @@ endpoint_return post_api_image(stream_cursor *cursor, server_machine *machine,
       value_start++;
     }
 
-    uint64_t content_length_val =
-        strtoull(content_length + value_start, nullptr, 10);
+    uint64_t content_length_val = 0;
+    if (!utils_str_to_uint64(content_length + value_start,
+                             &content_length_val)) {
+      bad_request(get_client_fd(machine), BUFFER, nullptr,
+                  "Invalid Content-Length value");
+      return FINISHED;
+    }
     if (content_length_val == 0) {
       bad_request(get_client_fd(local_machine), BUFFER, nullptr,
                   "Content-Length cannot be 0");
@@ -589,8 +594,8 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
   if (machine->server_ctx->endpoint_ctx == nullptr) {
     const char *current = get_param(machine, "current");
     assert(current != nullptr);
-    uint64_t curr = strtoull(current, nullptr, 10);
-    if (curr == 0) {
+    uint64_t curr = 0;
+    if (!utils_str_to_uint64(current, &curr) || curr == 0) {
       bad_request(get_client_fd(machine), BUFFER, nullptr,
                   "Invalid current parameter");
       return FINISHED;
@@ -598,7 +603,13 @@ endpoint_return get_api_image_cursor(server_machine *machine) {
     const char *limit = get_param(machine, "limit");
     assert(limit != nullptr);
 #warning "This is a no no"
-    uint64_t lim_tmp = strtoull(limit, nullptr, 10);
+    uint64_t lim_tmp = 0;
+    if (!utils_str_to_uint64(limit, &lim_tmp)) {
+      bad_request(get_client_fd(machine), BUFFER, nullptr,
+                  "Invalid limit parameter");
+      return FINISHED;
+    }
+#warning "unncesesary var"
     uint16_t lim = (uint16_t)lim_tmp;
 
     if (lim == 0 || curr < (uint64_t)(lim)) {

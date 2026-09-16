@@ -11,6 +11,10 @@ typedef struct F {
 } file;
 int open_file(file *f, const char *r_path, int flag);
 int close_file(file *f);
+/*
+ * if the return value is ULLONG_MAX and ERRNO = EDOM || EAGAIN
+ * the it failed
+ * */
 uint64_t get_biggest_index(const char *path);
 file open_img_at(const char *id, const char *path);
 uint64_t *open_files_to_arr(const char *path, file *const out,

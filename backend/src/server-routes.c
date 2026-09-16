@@ -1,8 +1,7 @@
 #include "../includes/server-routes.h"
-#define KEY_VALUE_T_SENTINEL                                                   \
-  (key_value_t) { 0 }
-#define SERVER_ROUTES_T_SENTINEL                                               \
-  (server_routes_t) { 0 }
+#include "http-sanitize.h"
+#define KEY_VALUE_T_SENTINEL (key_value_t){0}
+#define SERVER_ROUTES_T_SENTINEL (server_routes_t){0}
 server_routes_t _routes[] = {
     {
         .uri_regex = "GET "

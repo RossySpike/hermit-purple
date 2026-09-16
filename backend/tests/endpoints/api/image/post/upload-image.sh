@@ -430,7 +430,34 @@ fi
 log "TEST: uploading a valid .jpeg with a greater Content-Length. Expected results: response: 408 body: Request Timeout"
 TEST=$(send_request_excess_content_length "$THIS_DIR/good.jpeg" "good.jpeg.408.timeout.header.log")
 
-if [ "$TEST" = "Request Timeout" ]; then
+#
+# TEST: Check for `Invalid Content-Length value` (strtoull failed): Content-Length: -123231 should get `Bad headers` || `Invalid Content-Length value`
+#
+send_request_content_length_with_minus() {
+  log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
+  log "REQUEST DATA: $2"
+  echo "curl -v -s -D \"$2\" -X POST -H \"Expect: \" -H \"Content-Length: -$(wc -c <"$1") \" --data-binary @\"$1\" \"http://$HOST/api/image\"" >&2
+  RESULT=$(curl -v -s -D "$2" -X POST -H "Expect: " -H "Content-Length: -$(wc -c <"$1")   " --data-binary @"$1" "http://$HOST/api/image" 2>"/tmp/hermit-purple-test-helper.log")
+  log "RESULT:=$RESULT"
+  cat /tmp/hermit-purple-test-helper.log >>"$THIS_DIR/$2"
+  echo "$RESULT"
+
+}
+
+log "TEST: uploading a valid .jpg with a greater Content-Length. Expected results: response: 408 body: Bad headers || Invalid Content-Length value"
+TEST=$(send_request_content_length_with_minus "$THIS_DIR/good.jpg" "good.jpg.408.content.length.minus.header.log")
+
+if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid Content-Length value" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .heic with Content-Length. Expected results: response: 408 body: Bad headers || Invalid Content-Length value"
+TEST=$(send_request_content_length_with_minus "$THIS_DIR/good.heic" "good.heic.408.content.length.minus.header.log")
+
+if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid Content-Length value" ]; then
   echo "Test passed"
 
 else
@@ -438,4 +465,24 @@ else
   exit 1
 fi
 
+log "TEST: uploading a valid .png with Content-Length. Expected results: response: 408 body: Bad headers || Invalid Content-Length value"
+TEST=$(send_request_content_length_with_minus "$THIS_DIR/good.png" "good.png.408.content.length.minus.header.log")
+
+if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid Content-Length value" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
+log "TEST: uploading a valid .jpeg with Content-Length. Expected results: response: 408 body: Bad headers || Invalid Content-Length value"
+TEST=$(send_request_content_length_with_minus "$THIS_DIR/good.jpeg" "good.jpeg.408.content.length.minus.header.log")
+
+if [ "$TEST" = "Bad headers" ] || [ "$TEST" = "Invalid Content-Length value" ]; then
+  echo "Test passed"
+
+else
+  echo "Test failed"
+  exit 1
+fi
 exit 0

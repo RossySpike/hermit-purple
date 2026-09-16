@@ -1,7 +1,9 @@
 #include "../includes/files.h"   // for fperror
 #include "../includes/defines.h" // for fperror
 #include "logger.h"
+#include "utils.h"
 #include <inttypes.h>
+#include <limits.h>
 #include <stdint.h>
 
 #include <assert.h>
@@ -75,7 +77,11 @@ uint64_t get_biggest_index(const char *path) {
     char *file_name = entry->d_name;
     file_name[i] = '\0';
 
-    num = strtoull(file_name, nullptr, 10);
+    num = 0;
+    if (!utils_str_to_uint64(file_name, &num)) {
+      return ULLONG_MAX;
+    }
+
     if (num > max) {
       max = num;
     } else {
