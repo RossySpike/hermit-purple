@@ -44,6 +44,7 @@ run-tests-dev: test
 	cd ./tests/ && ./run_tests.sh ; \
 	TEST_STATUS=$$?;\
 	kill $$PID;
+	echo "TEST_STATUS: $$TEST_STATUS" \
 	exit $$TEST_STATUS
 
 run-tests-prod: make
@@ -52,6 +53,7 @@ run-tests-prod: make
 	cd ./tests/ && ./run_tests.sh ; \
 	TEST_STATUS=$$?;\
 	kill $$PID;
+	echo "TEST_STATUS: $$TEST_STATUS" \
 	exit $$TEST_STATUS
 
 
