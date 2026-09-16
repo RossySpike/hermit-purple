@@ -38,11 +38,18 @@ run-valgrind: test
   --suppressions=/usr/share/glib-2.0/valgrind/glib.supp \
   ./test/main.test.out
 
-run-tests: test
+run-tests-dev: test
 	./test/main.test.out & PID=$$! ; \
 	sleep 2 ; \
 	cd ./tests/ && ./run_tests.sh ; \
 	kill $$PID
+
+run-tests-prod: make
+	./test/hermit-purple & PID=$$! ; \
+	sleep 2 ; \
+	cd ./tests/ && ./run_tests.sh ; \
+	kill $$PID
+
 
 clean:
 	rm -f ./.gdb_history

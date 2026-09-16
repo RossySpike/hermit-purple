@@ -6,6 +6,12 @@
 THIS_DIR="$PATH_TO_TESTS_DIR/endpoints/api/image/post"
 
 LOG_FILE="$PATH_TO_TESTS_DIR/endpoints/api/image/post/log.log"
+
+tar -xzvf "$THIS_DIR"/images-files.tar.gz -C "$THIS_DIR" || {
+  echo "tar failed."
+  exit 1
+}
+
 rm "$LOG_FILE"
 log() {
 
