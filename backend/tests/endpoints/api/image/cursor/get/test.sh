@@ -15,9 +15,8 @@ log() {
 }
 
 send_request() {
-  log "ATTEMPTING TO UPLOAD IMAGE: \"$1\""
-  echo "curl -v -s       \"http://$HOST/api/image/cursor?current=\"$2\"&limit=\"$3\"\"" >&2
-  RESULT=$(curl -v -s "http://$HOST/api/image/cursor?current=$2&limit=$3")
+  echo "curl -v -s       \"http://$HOST/api/image/cursor?current=\"$1\"&limit=\"$2\"\"" >&2
+  RESULT=$(curl -v -s "http://$HOST/api/image/cursor?current=$1&limit=$2")
   log "RESULT:=$RESULT"
   echo "$RESULT"
 
