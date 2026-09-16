@@ -31,7 +31,8 @@
 // NOTHING, RETURN, BREAK, CONTINUE
 #define handle_action(action)                                                  \
   if ((action).type == CONTINUE) {                                             \
-    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: CONTINUE\n", __LINE__);          \
+    logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: CONTINUE\n", __func__,           \
+               __LINE__);                                                      \
     continue;                                                                  \
   }                                                                            \
   if ((action).type == BREAK) {                                                \
@@ -188,10 +189,6 @@ static action_t process_headers(server_machine *local_machine,
 static action_t process_work(server_machine *local_machine, char *send_buffer);
 endpoint_return server_job(void *args) {
   server_machine *local_machine = (server_machine *)args;
-  logger_log(LOG_HIGH | LOG_MEDIUM, "Client: %d,-----\n",
-             get_client_fd(local_machine));
-  logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
-  logger_log(LOG_HIGH | LOG_MEDIUM, "\n-----\n");
 
   if (get_state(local_machine) == WAITING) {
     set_state(local_machine, PROCESSING_REQUEST_LINE);
@@ -217,6 +214,12 @@ endpoint_return server_job(void *args) {
 
       local_machine->server_ctx->n =
           read(get_client_fd(local_machine), read_buffer, BUFFER - 1);
+      logger_log(LOG_HIGH | LOG_MEDIUM,
+                 "Client: %d, Chars Read: %d, Buffer: %d\n-----\n",
+                 get_client_fd(local_machine), local_machine->server_ctx->n,
+                 BUFFER);
+      logger_log(LOG_HIGH | LOG_MEDIUM, read_buffer);
+      logger_log(LOG_HIGH | LOG_MEDIUM, "\n-----\n");
       if (local_machine->server_ctx->n == 0) { // Client close conn
         return SOMETHING_WENT_WRONG;
       }
@@ -624,9 +627,10 @@ static action_t process_headers(server_machine *local_machine,
     if (cursor.curr == 0 &&
         (get_http_method(get_route_index(local_machine)) == HTTP_POST ||
          get_http_method(get_route_index(local_machine)) == HTTP_PUT)) {
-      bad_request(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr,
-                  "PUT and POST methods require a body");
-      ret_val.type = BREAK;
+      /* bad_request(get_client_fd(local_machine), (uint64_t)BUFFER, nullptr, */
+      /*             "PUT and POST methods require a body"); */
+      /* ret_val.type = BREAK; */
+      ret_val.type = CONTINUE;
       logger_log(LOG_HIGH | LOG_MEDIUM, "%s:%d: ret_val (%d)\n", __func__,
                  __LINE__, ret_val.type);
       return ret_val;

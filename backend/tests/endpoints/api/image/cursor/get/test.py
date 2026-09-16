@@ -79,6 +79,7 @@ def main():
     batch = get_batch(4, 4)
     items = extract_all_items_from_batch(batch)
     for item in items:
+        # print(item)
         if not compare_with_file(item, f"{THIS_DIR}/{item.img_id.value}.webp"):
             print("TEST FAILED")
             return 1
